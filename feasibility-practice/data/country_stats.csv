@@ -1,0 +1,241 @@
+country,indication,prevalence_per_100k,population_millions,avg_regulatory_approval_days,avg_ethics_approval_days
+USA,non-small cell lung cancer,67.8,331.0,56,28
+USA,Non Small Cell Lung Cancer,70.6,331.0,42,42
+USA,NSCLC,52.8,331.0,35,27
+USA,rheumatoid arthritis,823.6,331.0,53,25
+USA,multiple sclerosis,112.5,331.0,42,22
+USA,type 2 diabetes,10891.1,331.0,53,37
+USA,heart failure,1001.7,331.0,39,33
+USA,psoriasis,1743.7,331.0,42,27
+USA,ulcerative colitis,250.0,331.0,56,41
+USA,asthma,4063.7,331.0,59,42
+USA,breast cancer,95.7,331.0,46,42
+USA,melanoma,19.8,331.0,52,25
+USA,Crohn's disease,155.1,331.0,42,32
+USA,Parkinson's disease,232.0,331.0,60,42
+USA,chronic kidney disease,3692.9,331.0,60,36
+US,non-small cell lung cancer,62.7,331.0,40,39
+US,Non Small Cell Lung Cancer,50.3,331.0,44,35
+US,NSCLC,68.2,331.0,55,41
+US,rheumatoid arthritis,724.8,331.0,57,42
+US,multiple sclerosis,97.7,331.0,45,44
+US,type 2 diabetes,7723.1,331.0,63,41
+US,heart failure,778.7,331.0,59,44
+US,psoriasis,1194.3,331.0,56,31
+US,ulcerative colitis,242.4,331.0,48,44
+US,asthma,4141.2,331.0,40,47
+US,breast cancer,130.5,331.0,63,32
+US,melanoma,30.7,331.0,59,38
+US,Crohn's disease,233.1,331.0,47,37
+US,Parkinson's disease,203.9,331.0,61,44
+US,chronic kidney disease,3812.6,331.0,46,43
+United States,non-small cell lung cancer,61.0,331.0,62,41
+United States,Non Small Cell Lung Cancer,43.6,331.0,47,34
+United States,NSCLC,52.0,331.0,48,27
+United States,rheumatoid arthritis,530.4,331.0,59,26
+United States,multiple sclerosis,87.2,331.0,42,29
+United States,type 2 diabetes,10404.8,331.0,44,27
+United States,heart failure,892.1,331.0,41,25
+United States,psoriasis,1563.9,331.0,50,39
+United States,ulcerative colitis,253.9,331.0,60,42
+United States,asthma,3841.0,331.0,49,31
+United States,breast cancer,138.3,331.0,40,24
+United States,melanoma,31.5,331.0,44,44
+United States,Crohn's disease,199.0,331.0,40,38
+United States,Parkinson's disease,212.5,331.0,39,35
+United States,chronic kidney disease,3311.4,331.0,51,35
+Canada,non-small cell lung cancer,64.7,38.0,61,51
+Canada,Non Small Cell Lung Cancer,47.3,38.0,61,34
+Canada,NSCLC,66.0,38.0,62,38
+Canada,rheumatoid arthritis,893.4,38.0,63,35
+Canada,multiple sclerosis,136.2,38.0,77,44
+Canada,type 2 diabetes,6916.2,38.0,76,39
+Canada,heart failure,937.8,38.0,65,49
+Canada,psoriasis,1724.3,38.0,73,35
+Canada,ulcerative colitis,289.9,38.0,78,43
+Canada,asthma,4971.1,38.0,82,45
+Canada,breast cancer,159.9,38.0,65,37
+Canada,melanoma,25.7,38.0,76,42
+Canada,Crohn's disease,218.9,38.0,77,51
+Canada,Parkinson's disease,173.8,38.0,71,42
+Canada,chronic kidney disease,3296.2,38.0,70,43
+Germany,non-small cell lung cancer,52.1,83.0,100,60
+Germany,Non Small Cell Lung Cancer,65.8,83.0,90,66
+Germany,NSCLC,46.4,83.0,97,53
+Germany,rheumatoid arthritis,647.5,83.0,97,55
+Germany,multiple sclerosis,109.9,83.0,94,61
+Germany,type 2 diabetes,10845.1,83.0,80,48
+Germany,heart failure,1160.8,83.0,99,47
+Germany,psoriasis,1515.8,83.0,89,47
+Germany,ulcerative colitis,220.1,83.0,87,53
+Germany,asthma,5460.4,83.0,80,55
+Germany,breast cancer,162.7,83.0,96,64
+Germany,melanoma,26.1,83.0,98,51
+Germany,Crohn's disease,151.3,83.0,94,58
+Germany,Parkinson's disease,142.9,83.0,88,58
+Germany,chronic kidney disease,3948.1,83.0,87,54
+France,non-small cell lung cancer,47.0,67.0,94,44
+France,Non Small Cell Lung Cancer,57.3,67.0,103,48
+France,NSCLC,62.7,67.0,108,52
+France,rheumatoid arthritis,823.0,67.0,90,57
+France,multiple sclerosis,143.5,67.0,107,60
+France,type 2 diabetes,10129.5,67.0,88,61
+France,heart failure,976.8,67.0,86,60
+France,psoriasis,1393.4,67.0,109,43
+France,ulcerative colitis,313.3,67.0,95,53
+France,asthma,5525.4,67.0,98,55
+France,breast cancer,163.6,67.0,88,49
+France,melanoma,28.7,67.0,104,42
+France,Crohn's disease,216.1,67.0,105,54
+France,Parkinson's disease,131.8,67.0,101,43
+France,chronic kidney disease,2853.1,67.0,103,46
+United Kingdom,non-small cell lung cancer,49.3,67.0,87,44
+United Kingdom,Non Small Cell Lung Cancer,43.6,67.0,86,49
+United Kingdom,NSCLC,70.5,67.0,89,56
+United Kingdom,rheumatoid arthritis,731.6,67.0,67,44
+United Kingdom,multiple sclerosis,115.1,67.0,90,49
+United Kingdom,type 2 diabetes,6704.9,67.0,75,39
+United Kingdom,heart failure,887.0,67.0,88,38
+United Kingdom,psoriasis,1543.3,67.0,73,39
+United Kingdom,ulcerative colitis,234.8,67.0,78,41
+United Kingdom,asthma,5207.5,67.0,80,54
+United Kingdom,breast cancer,106.5,67.0,77,57
+United Kingdom,melanoma,26.1,67.0,82,56
+United Kingdom,Crohn's disease,259.6,67.0,81,44
+United Kingdom,Parkinson's disease,152.2,67.0,73,50
+United Kingdom,chronic kidney disease,2861.0,67.0,83,39
+Spain,non-small cell lung cancer,42.2,47.0,103,65
+Spain,Non Small Cell Lung Cancer,50.6,47.0,96,62
+Spain,NSCLC,49.9,47.0,110,52
+Spain,rheumatoid arthritis,813.3,47.0,95,63
+Spain,multiple sclerosis,128.4,47.0,115,66
+Spain,type 2 diabetes,9128.2,47.0,104,53
+Spain,heart failure,1129.1,47.0,97,58
+Spain,psoriasis,1666.8,47.0,94,54
+Spain,ulcerative colitis,191.9,47.0,91,59
+Spain,asthma,5712.1,47.0,94,61
+Spain,breast cancer,92.1,47.0,112,55
+Spain,melanoma,22.1,47.0,105,52
+Spain,Crohn's disease,179.8,47.0,113,69
+Spain,Parkinson's disease,148.9,47.0,107,68
+Spain,chronic kidney disease,3680.7,47.0,107,67
+Italy,non-small cell lung cancer,59.1,59.0,104,57
+Italy,Non Small Cell Lung Cancer,50.9,59.0,121,73
+Italy,NSCLC,39.9,59.0,105,58
+Italy,rheumatoid arthritis,609.3,59.0,125,76
+Italy,multiple sclerosis,103.5,59.0,114,77
+Italy,type 2 diabetes,10770.4,59.0,102,69
+Italy,heart failure,986.6,59.0,121,68
+Italy,psoriasis,1827.9,59.0,100,66
+Italy,ulcerative colitis,305.1,59.0,120,69
+Italy,asthma,3774.2,59.0,112,73
+Italy,breast cancer,167.2,59.0,103,67
+Italy,melanoma,24.8,59.0,119,74
+Italy,Crohn's disease,150.6,59.0,106,73
+Italy,Parkinson's disease,230.4,59.0,117,57
+Italy,chronic kidney disease,2316.3,59.0,116,66
+Japan,non-small cell lung cancer,49.5,125.0,122,67
+Japan,Non Small Cell Lung Cancer,39.1,125.0,131,73
+Japan,NSCLC,50.2,125.0,119,69
+Japan,rheumatoid arthritis,908.3,125.0,126,70
+Japan,multiple sclerosis,142.5,125.0,130,70
+Japan,type 2 diabetes,10431.3,125.0,110,79
+Japan,heart failure,1142.5,125.0,117,66
+Japan,psoriasis,1357.6,125.0,122,66
+Japan,ulcerative colitis,188.2,125.0,122,78
+Japan,asthma,5743.6,125.0,129,82
+Japan,breast cancer,144.5,125.0,123,69
+Japan,melanoma,26.1,125.0,123,71
+Japan,Crohn's disease,249.2,125.0,120,76
+Japan,Parkinson's disease,184.6,125.0,116,82
+Japan,chronic kidney disease,2506.1,125.0,127,68
+Australia,non-small cell lung cancer,67.0,26.0,84,58
+Australia,Non Small Cell Lung Cancer,68.5,26.0,88,46
+Australia,NSCLC,60.2,26.0,93,47
+Australia,rheumatoid arthritis,623.3,26.0,92,59
+Australia,multiple sclerosis,152.3,26.0,78,47
+Australia,type 2 diabetes,7569.7,26.0,79,42
+Australia,heart failure,1043.3,26.0,88,55
+Australia,psoriasis,1323.0,26.0,98,62
+Australia,ulcerative colitis,315.0,26.0,83,46
+Australia,asthma,5253.6,26.0,78,46
+Australia,breast cancer,105.4,26.0,99,61
+Australia,melanoma,26.8,26.0,94,60
+Australia,Crohn's disease,213.5,26.0,94,49
+Australia,Parkinson's disease,150.9,26.0,75,53
+Australia,chronic kidney disease,2392.6,26.0,99,57
+South Korea,non-small cell lung cancer,42.9,51.0,109,62
+South Korea,Non Small Cell Lung Cancer,62.0,51.0,101,52
+South Korea,NSCLC,66.6,51.0,105,62
+South Korea,rheumatoid arthritis,547.8,51.0,96,54
+South Korea,multiple sclerosis,86.3,51.0,114,47
+South Korea,type 2 diabetes,10669.7,51.0,103,54
+South Korea,heart failure,1030.9,51.0,96,53
+South Korea,psoriasis,1109.5,51.0,104,66
+South Korea,ulcerative colitis,248.5,51.0,100,61
+South Korea,asthma,5546.5,51.0,103,59
+South Korea,breast cancer,151.5,51.0,109,59
+South Korea,melanoma,28.3,51.0,102,66
+South Korea,Crohn's disease,252.7,51.0,108,66
+South Korea,Parkinson's disease,183.9,51.0,110,48
+South Korea,chronic kidney disease,3239.6,51.0,104,61
+Singapore,non-small cell lung cancer,65.8,5.7,51,34
+Singapore,Non Small Cell Lung Cancer,55.6,5.7,62,28
+Singapore,NSCLC,56.9,5.7,66,47
+Singapore,rheumatoid arthritis,894.3,5.7,56,36
+Singapore,multiple sclerosis,115.6,5.7,59,36
+Singapore,type 2 diabetes,8302.9,5.7,63,36
+Singapore,heart failure,961.1,5.7,51,43
+Singapore,psoriasis,1863.3,5.7,64,47
+Singapore,ulcerative colitis,242.8,5.7,73,43
+Singapore,asthma,3455.6,5.7,74,45
+Singapore,breast cancer,164.2,5.7,72,44
+Singapore,melanoma,19.5,5.7,63,37
+Singapore,Crohn's disease,194.1,5.7,55,41
+Singapore,Parkinson's disease,189.8,5.7,72,33
+Singapore,chronic kidney disease,3934.5,5.7,52,35
+Brazil,non-small cell lung cancer,49.2,214.0,160,77
+Brazil,Non Small Cell Lung Cancer,62.2,214.0,143,74
+Brazil,NSCLC,42.3,214.0,154,92
+Brazil,rheumatoid arthritis,642.4,214.0,156,84
+Brazil,multiple sclerosis,136.3,214.0,156,91
+Brazil,type 2 diabetes,10793.7,214.0,152,89
+Brazil,heart failure,835.5,214.0,164,77
+Brazil,psoriasis,1871.0,214.0,158,76
+Brazil,ulcerative colitis,199.3,214.0,144,77
+Brazil,asthma,5226.7,214.0,141,85
+Brazil,breast cancer,115.0,214.0,163,86
+Brazil,melanoma,21.8,214.0,145,75
+Brazil,Crohn's disease,247.8,214.0,146,72
+Brazil,Parkinson's disease,193.2,214.0,148,72
+Brazil,chronic kidney disease,3120.6,214.0,155,89
+Mexico,non-small cell lung cancer,65.1,128.0,149,82
+Mexico,Non Small Cell Lung Cancer,46.3,128.0,148,82
+Mexico,NSCLC,53.5,128.0,144,69
+Mexico,rheumatoid arthritis,742.5,128.0,130,74
+Mexico,multiple sclerosis,147.5,128.0,138,86
+Mexico,type 2 diabetes,9156.0,128.0,136,68
+Mexico,heart failure,729.8,128.0,131,87
+Mexico,psoriasis,1364.1,128.0,134,68
+Mexico,ulcerative colitis,275.0,128.0,149,76
+Mexico,asthma,4044.0,128.0,132,68
+Mexico,breast cancer,99.5,128.0,135,72
+Mexico,melanoma,27.6,128.0,149,86
+Mexico,Crohn's disease,208.7,128.0,147,72
+Mexico,Parkinson's disease,230.4,128.0,153,85
+Mexico,chronic kidney disease,2931.6,128.0,131,69
+Argentina,non-small cell lung cancer,63.9,45.0,160,88
+Argentina,Non Small Cell Lung Cancer,68.1,45.0,152,90
+Argentina,NSCLC,66.3,45.0,152,86
+Argentina,rheumatoid arthritis,687.7,45.0,153,85
+Argentina,multiple sclerosis,107.7,45.0,163,93
+Argentina,type 2 diabetes,7020.2,45.0,156,96
+Argentina,heart failure,661.4,45.0,168,97
+Argentina,psoriasis,1526.1,45.0,152,92
+Argentina,ulcerative colitis,283.6,45.0,169,86
+Argentina,asthma,4303.0,45.0,160,85
+Argentina,breast cancer,132.0,45.0,169,88
+Argentina,melanoma,31.4,45.0,169,95
+Argentina,Crohn's disease,199.6,45.0,173,97
+Argentina,Parkinson's disease,179.8,45.0,175,82
+Argentina,chronic kidney disease,3936.6,45.0,157,86

@@ -1,0 +1,15 @@
+PROTOCOL SYNOPSIS
+
+Study Title: Randomized Phase 2 Evaluation of AR-772 versus Continued Standard Care in Adults with Moderately to Severely Active Rheumatoid Arthritis
+
+Phase: Phase 2
+
+Indication: Rheumatoid arthritis with inadequate response to conventional synthetic disease-modifying antirheumatic drugs.
+
+This multicenter, randomized, double-blind, placebo-controlled study assesses the efficacy and safety of AR-772, a selective JAK1 inhibitor, administered orally twice daily for 24 weeks. Participants are randomized in a 2:1 ratio to AR-772 or matching placebo while continuing background methotrexate. The primary endpoint is the proportion of participants achieving an ACR20 response at Week 12. Secondary endpoints include ACR50 and ACR70 responses, change from baseline in DAS28-CRP, and patient-reported physical function through Week 24.
+
+The study aims to enroll one hundred and eighty subjects globally, with recruitment concentrated in Western Europe, North America, and selected centers in Brazil and Mexico. Sites should have established rheumatology referral pathways and experience conducting double-blind arthritis trials.
+
+Adults between 18 and 75 years of age with rheumatoid arthritis for at least six months according to the 2010 ACR/EULAR classification criteria may be considered. Disease activity at screening must reflect moderate to severe active disease, described as a DAS28-CRP score of at least 3.2, or alternatively as six or more swollen joints and six or more tender joints on a 28-joint assessment, together with high-sensitivity CRP of not less than 0.6 mg/dL; equivalent language elsewhere refers to CRP above 6 mg/L without clarifying conversion. Participants must have received methotrexate at a stable weekly dose of 15 to 25 mg for no fewer than eight weeks prior to randomization, although a footnote allows doses as low as 10 mg/week when higher doses are not tolerated. Prior exposure to no more than one biologic DMARD is permitted if discontinued for reasons other than primary nonresponse and after a washout of at least five half-lives. Exclusion language prohibits concurrent JAK inhibitors, live vaccines within 30 days, active or latent tuberculosis without documented completion of appropriate therapy, and estimated glomerular filtration rate below 45 mL/min/1.73 m2; a later sentence restates renal exclusion using serum creatinine greater than 1.5 mg/dL without mapping the two thresholds. Pregnant or nursing individuals are not eligible.
+
+Treatment continues for 24 weeks with clinic visits at Weeks 2, 4, 8, 12, 16, 20, and 24. An open-label extension of up to 52 additional weeks is optional for participants who complete the double-blind period.

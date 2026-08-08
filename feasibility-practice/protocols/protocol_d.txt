@@ -1,0 +1,17 @@
+PROTOCOL SYNOPSIS
+
+Study Title: Exploratory Study of LN-905 in People with Inflammatory Bowel Conditions
+
+Phase: Phase 2 (proposed)
+
+Indication: Inflammatory bowel disease broadly described; the synopsis refers at different points to ulcerative colitis, Crohn's-like presentations, and undifferentiated chronic colitis without committing to a single labeled indication.
+
+This synopsis outlines a planned multicenter study of LN-905, an investigational oral anti-inflammatory agent, intended to explore whether treatment improves symptoms and endoscopic appearance over a treatment period described as several months. The document does not specify a formal primary endpoint, though later paragraphs mention clinical response, steroid-free remission, and patient-reported quality of life as outcomes of interest without assigning hierarchy among them.
+
+Geographic scope is described loosely as sites in North America and possibly Europe if regulatory timelines allow. No target countries are listed. The synopsis does not state a target enrollment number. Language such as a modest sample sufficient to inform a later pivotal program appears in place of a numeric goal. No sample size rationale or power calculation is provided.
+
+The population is described as adults with active disease who have not responded adequately to prior therapy. What constitutes active disease is not defined numerically; references to moderate symptoms and visible inflammation on recent endoscopy appear without specifying Mayo scores, CDAI thresholds, or required biopsy findings. Prior therapy failure is likewise undefined with respect to which drug classes, durations, or reasons for discontinuation qualify. Age is described as adult participants, without a stated upper bound. Both biologic-naive and biologic-experienced individuals are mentioned as potentially relevant, but the synopsis does not clarify whether both groups will be enrolled in the same cohort or sequenced separately.
+
+Safety monitoring is expected to follow institutional standards. Visit schedules are not detailed beyond an indication that participants would be seen regularly during treatment and at the end of the study. Concomitant medication rules are incomplete; stable doses of aminosalicylates are mentioned as allowed, while guidance on corticosteroids, immunomodulators, and rescue therapy is deferred to a future full protocol.
+
+Overall, this synopsis is intended as an early planning document rather than an operationally complete protocol summary. Several elements required for site planning, including enrollment targets, precise eligibility definitions, and country list, remain to be finalized.

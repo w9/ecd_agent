@@ -1,0 +1,17 @@
+PROTOCOL SYNOPSIS
+
+Study Title: A Phase 1/2 Basket Study of BG-3180 with Companion Biomarker Testing in Pediatric and Young Adult Patients with Relapsed Solid Tumors Harboring NTRK or RET Alterations
+
+Phase: Phase 1/2
+
+Indication: Relapsed or refractory solid tumors with documented NTRK fusion or RET alteration in patients aged 2 to 21 years.
+
+BG-3180 is an oral pan-TRK/RET inhibitor under investigation for molecularly defined pediatric cancers. This open-label basket study combines dose finding in Phase 1 with indication-specific expansion cohorts in Phase 2. The primary Phase 1 objective is safety and determination of a pediatric recommended Phase 2 dose. The primary Phase 2 objective is confirmed objective response rate by independent central review.
+
+Target enrollment is approximately 60 participants across both phases, with at least 40 percent of participants expected to be younger than 12 years of age. Preferred geographic footprint includes the United States, United Kingdom, France, and Japan, reflecting centers with established pediatric oncology networks.
+
+Because eligibility depends on molecular confirmation, participating sites must have on-site or tightly coordinated biomarker testing capable of detecting NTRK fusions and RET alterations using validated next-generation sequencing or FISH assays with turnaround acceptable for screening windows of 21 days. Sites without biomarker testing capability cannot screen participants under this protocol. Additionally, sites must maintain pediatric inpatient and outpatient research infrastructure, including age-appropriate assent procedures, pediatric dosing formulations handling, and access to pediatric intensive care support for management of potential treatment-related toxicities. Adult-only oncology centers without pediatric capability are outside the intended site profile.
+
+Participants must have a histologically or cytologically confirmed solid tumor that has progressed after at least one prior systemic regimen appropriate for the tumor type, or for which no standard curative option exists. Molecular documentation of an NTRK fusion or activating RET alteration is required prior to first dose. Performance status must be Lansky or Karnofsky score of at least 50 depending on age. Adequate organ function and recovery from prior therapy are required. Prior treatment with a selective TRK or RET inhibitor excludes participation. Active uncontrolled infection, pregnancy, and known hypersensitivity to the study drug formulation are exclusionary.
+
+Dose escalation uses a rolling six design. Expansion cohorts enroll by molecular subgroup. Participants may continue treatment until progression or unacceptable toxicity. Imaging assessments occur every eight weeks for the first year and every twelve weeks thereafter.

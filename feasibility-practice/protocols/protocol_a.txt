@@ -1,0 +1,15 @@
+PROTOCOL SYNOPSIS
+
+Study Title: A Phase 1 Open-Label Dose Escalation Study of VX-4419 in Adults with Advanced Non-Small Cell Lung Cancer
+
+Phase: Phase 1
+
+Indication: Non-small cell lung cancer (NSCLC), locally advanced or metastatic disease after at least one prior line of systemic therapy.
+
+This first-in-human study evaluates the safety, tolerability, and pharmacokinetics of VX-4419, an oral small-molecule inhibitor of the MET signaling pathway, administered once daily in 21-day cycles. The primary objective is to determine the maximum tolerated dose and the recommended Phase 2 dose. Secondary objectives include characterization of dose-limiting toxicities, preliminary antitumor activity assessed by RECIST v1.1, and exploratory biomarker analyses in circulating tumor DNA.
+
+Target enrollment is approximately 42 participants across dose escalation cohorts, with an expansion cohort of up to 18 additional participants at the recommended Phase 2 dose. The study is planned to enroll at sites in the United States, Canada, Germany, and Japan. Individual sites are expected to contribute between two and six participants depending on local referral volume.
+
+Eligible participants are adults aged 18 years or older with histologically confirmed advanced NSCLC that has progressed after platinum-based chemotherapy or a prior immunotherapy regimen. Participants must have measurable disease, an ECOG performance status of 0 or 1, and adequate bone marrow, hepatic, and renal function as defined by laboratory thresholds in the full protocol. Prior MET-directed therapy is not permitted. Participants with untreated central nervous system metastases, active interstitial lung disease, or a history of significant cardiac arrhythmia within six months are excluded. Women of childbearing potential and male participants with partners of childbearing potential must agree to use highly effective contraception during treatment and for 90 days after the last dose.
+
+The dose escalation portion follows a standard 3+3 design. Participants remain on study treatment until disease progression, unacceptable toxicity, or withdrawal of consent. Safety follow-up continues for 28 days after the final dose. The estimated study duration from first participant enrolled to last participant last visit is approximately 24 months.
