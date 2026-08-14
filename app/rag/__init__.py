@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.rag.chunk import Chunk, chunk_section, chunk_sections
 from app.rag.parse import ProtocolSection, iter_protocol_files, parse_study, parse_study_file
-from app.rag.store import load_chunks_from_path, save_chunks
+from app.rag.store import load_chunks_from_path, save_chunks, search_chunks_from_path
 
 
 def ingest_protocol_dir(protocols_dir: Path | str) -> list[Chunk]:
@@ -35,4 +35,5 @@ __all__ = [
     "parse_study_file",
     "persist_protocol_dir",
     "save_chunks",
+    "search_chunks_from_path",
 ]

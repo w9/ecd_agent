@@ -3,7 +3,7 @@
 import sqlite3
 
 from app.rag.chunk import Chunk
-from app.rag.store import load_chunks_from_path, save_chunks
+from app.rag.store import load_chunks_from_path, save_chunks, search_chunks_from_path
 
 
 def _chunk(**overrides: object) -> Chunk:
@@ -48,7 +48,7 @@ def test_save_chunks_replaces_previous_rows(tmp_path) -> None:
     assert stored[0].section == "design"
 
 
-def test_schema_is_plain_table_not_fts(tmp_path) -> None:
+def test_fts5_is_separate_external_content_table(tmp_path) -> None:
     db_path = tmp_path / "protocols.db"
     save_chunks(db_path, [_chunk()])
 
@@ -57,12 +57,53 @@ def test_schema_is_plain_table_not_fts(tmp_path) -> None:
         table_sql = conn.execute(
             "SELECT sql FROM sqlite_master WHERE name = 'protocol_chunks'"
         ).fetchone()[0]
-        fts_tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%fts5%'"
-        ).fetchall()
+        fts_sql = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'protocol_chunks_fts'"
+        ).fetchone()[0]
     finally:
         conn.close()
 
     assert "CREATE TABLE" in table_sql
     assert "INTEGER PRIMARY KEY" in table_sql
-    assert fts_tables == []
+    assert "USING fts5" in fts_sql
+    assert "content='protocol_chunks'" in fts_sql
+    assert "content_rowid='id'" in fts_sql
+
+
+def test_fts5_search_ranks_matching_chunk(tmp_path) -> None:
+    db_path = tmp_path / "protocols.db"
+    save_chunks(
+        db_path,
+        [
+            _chunk(
+                section="interventions",
+                text="AZD1222 is a chimpanzee adenovirus vaccine",
+                end_char=44,
+                chunk_index=0,
+            ),
+            _chunk(
+                section="conditions",
+                text="COVID-19, SARS-CoV-2",
+                end_char=20,
+                chunk_index=0,
+            ),
+        ],
+    )
+
+    hits = search_chunks_from_path(db_path, "AZD1222 adenovirus")
+    assert hits
+    top, rank = hits[0]
+    assert top.section == "interventions"
+    assert "AZD1222" in top.text
+    assert isinstance(rank, float)
+
+
+def test_fts5_search_drops_replaced_content(tmp_path) -> None:
+    db_path = tmp_path / "protocols.db"
+    save_chunks(db_path, [_chunk(text="cedazuridine with decitabine", end_char=28)])
+    save_chunks(db_path, [_chunk(text="mRNA-1273 SARS-CoV-2 vaccine", end_char=28)])
+
+    assert search_chunks_from_path(db_path, "cedazuridine") == []
+    hits = search_chunks_from_path(db_path, "vaccine")
+    assert len(hits) == 1
+    assert "mRNA-1273" in hits[0][0].text
