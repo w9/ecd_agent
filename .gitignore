@@ -1,0 +1,39 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment and secrets
+.env
+.env.local
+*.pem
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Generated / cached data (keep directory via .gitkeep)
+data/**
+!data/.gitkeep
+
+# OS / misc
+*.log
+.cache/
