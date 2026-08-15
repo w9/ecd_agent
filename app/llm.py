@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import sys
 from pathlib import Path
 
 import httpx
@@ -31,6 +33,17 @@ def complete(prompt: str, *, system: str | None = None) -> str:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
+    body = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0,
+        "max_tokens": 1024,
+    }
+    if settings.llm_debug:
+        print("=== LLM request ===", file=sys.stderr, flush=True)
+        print(json.dumps(body, indent=2), file=sys.stderr, flush=True)
+        print("=== end LLM request ===", file=sys.stderr, flush=True)
+
     try:
         with httpx.Client(timeout=60.0) as client:
             response = client.post(
@@ -41,12 +54,7 @@ def complete(prompt: str, *, system: str | None = None) -> str:
                     "HTTP-Referer": "https://openrouter.ai",
                     "X-OpenRouter-Title": "clinical-site-feasibility",
                 },
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "temperature": 0,
-                    "max_tokens": 1024,
-                },
+                json=body,
             )
             response.raise_for_status()
             payload = response.json()

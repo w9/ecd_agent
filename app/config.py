@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://openrouter.ai/api/v1"
     llm_model: str = "openai/gpt-5.6-luna"
     llm_provider: str = "openrouter"
+    llm_debug: bool = False
 
 
 @lru_cache
