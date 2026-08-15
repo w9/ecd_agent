@@ -22,6 +22,7 @@ env/
 # Environment and secrets
 .env
 .env.local
+.secrets/
 *.pem
 
 # IDE / editor
