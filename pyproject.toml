@@ -27,3 +27,6 @@ packages = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "e2e: end-to-end HTTP tests for the SPECS.md query contract",
+]
