@@ -29,12 +29,13 @@ class Settings(BaseSettings):
     sites_csv_path: Path = PROJECT_ROOT / "data" / "sites.csv"
     sites_db_path: Path = PROJECT_ROOT / "data" / "sites.db"
 
-    # LLM placeholders for later use (not required for /health)
+    # LLM / OpenRouter (protocol and hybrid answers)
     openai_api_key: str | None = None
+    openrouter_api_key: str | None = None
     anthropic_api_key: str | None = None
-    llm_base_url: str | None = None
-    llm_model: str | None = None
-    llm_provider: str = "openai"
+    llm_base_url: str = "https://openrouter.ai/api/v1"
+    llm_model: str = "openai/gpt-5.6-luna"
+    llm_provider: str = "openrouter"
 
 
 @lru_cache
