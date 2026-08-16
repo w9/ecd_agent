@@ -29,9 +29,13 @@ env:
 # Install deps and ensure .env exists
 setup: sync env
 
-# Run the FastAPI app with reload (dev chat UI: http://127.0.0.1:8000/chat)
-serve:
-    uv run uvicorn app.main:app --reload --host {{ host }} --port {{ port }}
+# Run the FastAPI app with reload + LLM debug (chat UI: http://127.0.0.1:8000/chat)
+dev:
+    LLM_DEBUG=true uv run uvicorn app.main:app --reload --host {{ host }} --port {{ port }}
+
+# Run the FastAPI app without reload (production-like)
+prod:
+    uv run uvicorn app.main:app --host {{ host }} --port {{ port }}
 
 # GET /health
 health:
