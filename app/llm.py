@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import sys
 from dataclasses import dataclass, field
@@ -135,8 +136,8 @@ def chat(
         raise LLMError("LLM unavailable")
     result = ChatResult(content=content, tool_calls=tool_calls)
     if settings.llm_debug:
-        result.debug_request = body
-        result.debug_response = payload
+        result.debug_request = copy.deepcopy(body)
+        result.debug_response = copy.deepcopy(payload)
     return result
 
 

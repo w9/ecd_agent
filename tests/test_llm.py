@@ -55,6 +55,21 @@ def test_chat_attaches_debug_payloads_when_enabled(monkeypatch) -> None:
     }
 
 
+def test_chat_debug_request_is_a_snapshot(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.llm.get_settings",
+        lambda: Settings(llm_debug=True, openrouter_api_key="test-key"),
+    )
+    monkeypatch.setattr("app.llm.httpx.Client", _FakeClient)
+
+    messages = [{"role": "user", "content": "ping"}]
+    result = chat(messages)
+    messages.append({"role": "assistant", "content": "later"})
+
+    assert result.debug_request is not None
+    assert result.debug_request["messages"] == [{"role": "user", "content": "ping"}]
+
+
 def test_chat_omits_debug_payloads_by_default(monkeypatch) -> None:
     monkeypatch.setattr(
         "app.llm.get_settings",

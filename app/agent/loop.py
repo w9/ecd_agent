@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -62,10 +63,12 @@ def run_agent(
 def _capture_debug(debug_turns: list[LlmDebugExchange], result: ChatResult) -> None:
     if result.debug_request is None:
         return
+    # Snapshot now. The loop appends tool results to `messages` next, and
+    # debug_request may still alias that live list.
     debug_turns.append(
         LlmDebugExchange(
-            request=result.debug_request,
-            response=result.debug_response or {},
+            request=copy.deepcopy(result.debug_request),
+            response=copy.deepcopy(result.debug_response or {}),
         )
     )
 

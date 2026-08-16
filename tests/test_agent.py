@@ -216,6 +216,53 @@ def test_run_agent_includes_llm_debug(ctx: ToolContext, monkeypatch: pytest.Monk
     assert response.llm_debug[1].request["messages"] == ["turn-2"]
 
 
+def test_run_agent_debug_cards_snapshot_each_turn(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_chat(messages: list, **kwargs: object) -> ChatResult:
+        del kwargs
+        live_request = {"messages": messages}
+        if any(item.get("role") == "tool" for item in messages):
+            return ChatResult(
+                content="The monthly enrollment rate for SITE-001 is 8.3.",
+                debug_request=live_request,
+                debug_response={"id": "resp-2"},
+            )
+        return ChatResult(
+            tool_calls=[
+                ToolCall(
+                    id="c1",
+                    name="get_site_metric",
+                    arguments={
+                        "site_id": "SITE-001",
+                        "field": "monthly_enrollment_rate",
+                    },
+                )
+            ],
+            debug_request=live_request,
+            debug_response={"id": "resp-1"},
+        )
+
+    monkeypatch.setattr("app.llm.chat", fake_chat)
+    response = run_agent(
+        "What is the enrollment rate for SITE-001?",
+        None,
+        sites_db_path=ctx.sites_db_path,
+        protocols_db_path=ctx.protocols_db_path,
+    )
+    assert response.llm_debug is not None
+    assert [item["role"] for item in response.llm_debug[0].request["messages"]] == [
+        "system",
+        "user",
+    ]
+    assert [item["role"] for item in response.llm_debug[1].request["messages"]] == [
+        "system",
+        "user",
+        "assistant",
+        "tool",
+    ]
+
+
 def test_run_agent_llm_error_is_not_swallowed(
     ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
 ) -> None:
