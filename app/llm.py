@@ -112,6 +112,11 @@ def chat(
     except (httpx.HTTPError, ValueError) as exc:
         raise LLMError("LLM unavailable") from exc
 
+    if settings.llm_debug:
+        print("=== LLM response ===", file=sys.stderr, flush=True)
+        print(json.dumps(payload, indent=2), file=sys.stderr, flush=True)
+        print("=== end LLM response ===", file=sys.stderr, flush=True)
+
     try:
         message = payload["choices"][0]["message"]
     except (KeyError, IndexError, TypeError) as exc:
