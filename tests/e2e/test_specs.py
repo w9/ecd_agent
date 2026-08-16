@@ -343,17 +343,14 @@ def test_invalid_request_returns_422(e2e_client, payload: dict) -> None:
 
 
 @pytest.mark.e2e
-def test_llm_down_returns_503_for_protocol_but_site_still_works(
+def test_llm_down_returns_503_for_every_query(
     e2e_client,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def boom(*args: object, **kwargs: object) -> str:
         raise RuntimeError("llm unavailable")
 
-    try:
-        monkeypatch.setattr("app.llm.complete", boom)
-    except (ImportError, AttributeError, ModuleNotFoundError):
-        pass
+    monkeypatch.setattr("app.llm.chat", boom)
 
     protocol = _post(e2e_client, "What is the minimum age for NCT04516746?")
     assert protocol.status_code == 503
@@ -368,11 +365,7 @@ def test_llm_down_returns_503_for_protocol_but_site_still_works(
     assert hybrid.status_code == 503
 
     site = _post(e2e_client, "What is the enrollment rate for SITE-001?")
-    assert site.status_code == 200
-    site_body = site.json()
-    _assert_envelope(site_body)
-    assert site_body["route"] == "site"
-    assert "8.3" in site_body["answer"]
+    assert site.status_code == 503
 
 
 @pytest.mark.e2e

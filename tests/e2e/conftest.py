@@ -12,6 +12,7 @@ from app.config import Settings, get_settings
 from app.main import app
 from app.rag.chunk import Chunk
 from app.rag.store import save_chunks
+from tests.e2e.agent_stub import scripted_chat
 
 # Mirrors scripts/create_mock_site_data.py so ranking and edge rows match SPECS.
 E2E_SITE_ROWS = [
@@ -129,12 +130,22 @@ def e2e_settings(
 
 
 @pytest.fixture
-def e2e_client(e2e_settings: Settings) -> TestClient:
+def scripted_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Deterministic tool-calling model used by the agent loop."""
+    monkeypatch.setattr("app.llm.chat", scripted_chat)
+
+
+@pytest.fixture
+def e2e_client(e2e_settings: Settings, scripted_llm: None) -> TestClient:
     return TestClient(app)
 
 
 @pytest.fixture
-def e2e_client_missing_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
+def e2e_client_missing_data(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    scripted_llm: None,
+) -> TestClient:
     _bind_settings(
         monkeypatch,
         Settings(
@@ -146,17 +157,6 @@ def e2e_client_missing_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 
 
 @pytest.fixture
-def stub_llm(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Deterministic model double. No-op until `app.llm` exists."""
-
-    def complete(*args: object, **kwargs: object) -> str:
-        return (
-            "Grounded from retrieved text: minimum age is 18 years. "
-            "Inclusion requires a histologically confirmed oncology diagnosis. "
-            "Consider SITE-001 and SITE-007 for an oncology trial."
-        )
-
-    try:
-        monkeypatch.setattr("app.llm.complete", complete)
-    except (ImportError, AttributeError, ModuleNotFoundError):
-        pass
+def stub_llm(scripted_llm: None) -> None:
+    """Alias kept for SPECS tests that still request stub_llm."""
+    return None

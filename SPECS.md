@@ -10,16 +10,16 @@ Behavior contract for the graded deliverables. Edit this file; implementation fo
 
 ## Routes
 
-Every accepted query is classified as exactly one of:
+The model chooses tools and arguments. `route` is inferred from which tools ran, not from a regex classifier.
 
 | Route | When | Data used |
 |-------|------|-----------|
-| `site` | Quantitative site metric (rate, active trials, slots, capacity, ranking) | `sites` DB only |
-| `protocol` | Eligibility / scientific / design question about a study | protocol chunks only |
-| `hybrid` | Site recommendation that depends on protocol context | both |
-| `reject` | Out of scope, unsafe, or too incomplete to act | none |
+| `site` | Site tools only (lookup, metric, rank, list) | `sites` DB only |
+| `protocol` | `search_protocol` only | protocol chunks only |
+| `hybrid` | Site tools and `search_protocol` | both |
+| `reject` | `reject` tool, or a final answer with no data tools | none |
 
-Lookalikes stay on the protocol side: “enrollment **criteria**” is eligibility, not a site rate.
+Lookalikes stay on the protocol side: “enrollment **criteria**” is eligibility, not a site rate. The model must call `search_protocol`, not a site metric tool.
 
 ---
 
@@ -138,5 +138,5 @@ Protocol / hybrid may pass `nct_id` (also accepted inside `query` text). “Atta
 | Bad request shape | 422 |
 | Unknown site / null metric / empty retrieval | 200 + abstain, no invented facts |
 | Malformed or missing tool result | Abstain; do not answer from free text |
-| LLM down (protocol / hybrid) | 503 with an error body. Site-only queries still work. |
+| LLM down | 503 with an error body. Every query goes through the agent, including site metrics. |
 | Cached protocols / local DB unavailable | 200 + abstain (or 503 if the whole service cannot run) |

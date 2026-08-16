@@ -45,7 +45,7 @@ def protocols() -> list[CachedProtocol]:
 
 @app.post("/query", response_model=QueryResponse, response_model_exclude_none=True)
 def query(payload: QueryRequest) -> QueryResponse:
-    """Route a free-text question to sites, protocols, both, or a rejection."""
+    """Run the tool-using agent on a free-text feasibility question."""
     try:
         return handle_query(
             payload,
