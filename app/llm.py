@@ -33,6 +33,8 @@ class ToolCall:
 class ChatResult:
     content: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
+    debug_request: dict[str, Any] | None = None
+    debug_response: dict[str, Any] | None = None
 
     def as_message(self) -> dict[str, Any]:
         """OpenAI-compatible assistant message to append to the transcript."""
@@ -131,7 +133,11 @@ def chat(
     tool_calls = _parse_tool_calls(message.get("tool_calls"))
     if not tool_calls and (not content or not content.strip()):
         raise LLMError("LLM unavailable")
-    return ChatResult(content=content, tool_calls=tool_calls)
+    result = ChatResult(content=content, tool_calls=tool_calls)
+    if settings.llm_debug:
+        result.debug_request = body
+        result.debug_response = payload
+    return result
 
 
 def _parse_tool_calls(raw: object) -> list[ToolCall]:

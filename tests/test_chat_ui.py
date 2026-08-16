@@ -19,6 +19,8 @@ def test_chat_page_returns_html() -> None:
     assert "Site metrics" in response.text
     assert "What is the enrollment rate for SITE-001?" in response.text
     assert "Out of scope" in response.text
+    assert "debug-card" in response.text
+    assert "navigator.clipboard.writeText" in response.text
 
 
 def test_protocols_lists_cached_studies(tmp_path, monkeypatch) -> None:

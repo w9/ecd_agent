@@ -251,6 +251,61 @@
       opacity: 0.55;
       cursor: default;
     }
+
+    .debug-list {
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .debug-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f6f8fa;
+      overflow: hidden;
+    }
+
+    .debug-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    button.copy {
+      font: inherit;
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 3px 8px;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    button.copy:hover { border-color: var(--accent); color: var(--accent); }
+
+    .debug-card pre {
+      margin: 0;
+      max-height: 240px;
+      overflow: auto;
+      padding: 10px 12px;
+      background: #fff;
+      color: var(--ink);
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre;
+    }
   </style>
 </head>
 <body>
@@ -488,6 +543,39 @@
       return card;
     }
 
+    function renderDebug(exchanges) {
+      if (!Array.isArray(exchanges) || !exchanges.length) return null;
+      const list = el("div", "debug-list");
+      exchanges.forEach((exchange, index) => {
+        const suffix = exchanges.length > 1 ? ` ${index + 1}` : "";
+        list.appendChild(jsonCard(`LLM request${suffix}`, exchange.request));
+        list.appendChild(jsonCard(`LLM response${suffix}`, exchange.response));
+      });
+      return list;
+    }
+
+    function jsonCard(title, payload) {
+      const text = JSON.stringify(payload ?? {}, null, 2);
+      const card = el("div", "debug-card");
+      const head = el("div", "debug-head");
+      head.appendChild(el("span", "", title));
+      const btn = el("button", "copy", "Copy");
+      btn.type = "button";
+      btn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.textContent = "Copied";
+        } catch {
+          btn.textContent = "Failed";
+        }
+        setTimeout(() => { btn.textContent = "Copy"; }, 1200);
+      });
+      head.appendChild(btn);
+      card.appendChild(head);
+      card.appendChild(el("pre", "", text));
+      return card;
+    }
+
     async function loadProtocols() {
       try {
         const response = await fetch("/protocols");
@@ -536,6 +624,8 @@
           return;
         }
         thread.appendChild(renderAnswer(body));
+        const debug = renderDebug(body.llm_debug);
+        if (debug) thread.appendChild(debug);
       } catch {
         pending.remove();
         thread.appendChild(el("div", "msg error", "Could not reach the API. Is the server running?"));

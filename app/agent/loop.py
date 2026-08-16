@@ -11,7 +11,7 @@ from app.agent.assemble import assemble, should_short_circuit
 from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.tools import TOOL_SCHEMAS, EvidenceLedger, ToolContext, execute_tool
 from app.llm import ChatResult, LLMError
-from app.schemas import QueryResponse
+from app.schemas import LlmDebugExchange, QueryResponse
 
 MAX_STEPS = 6
 
@@ -25,13 +25,20 @@ def run_agent(
 ) -> QueryResponse:
     ctx = ToolContext(sites_db_path=sites_db_path, protocols_db_path=protocols_db_path)
     ledger = EvidenceLedger()
+    debug_turns: list[LlmDebugExchange] = []
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": _user_message(query, nct_id)},
     ]
 
+    def finish(response: QueryResponse) -> QueryResponse:
+        if not debug_turns:
+            return response
+        return response.model_copy(update={"llm_debug": debug_turns})
+
     for _ in range(MAX_STEPS):
         result = _step(messages)
+        _capture_debug(debug_turns, result)
         if result.tool_calls:
             messages.append(result.as_message())
             for call in result.tool_calls:
@@ -45,11 +52,22 @@ def run_agent(
                     }
                 )
             if should_short_circuit(ledger):
-                return assemble(query, ledger, None)
+                return finish(assemble(query, ledger, None))
             continue
-        return assemble(query, ledger, result.content)
+        return finish(assemble(query, ledger, result.content))
 
-    return assemble(query, ledger, None)
+    return finish(assemble(query, ledger, None))
+
+
+def _capture_debug(debug_turns: list[LlmDebugExchange], result: ChatResult) -> None:
+    if result.debug_request is None:
+        return
+    debug_turns.append(
+        LlmDebugExchange(
+            request=result.debug_request,
+            response=result.debug_response or {},
+        )
+    )
 
 
 def _step(messages: list[dict[str, Any]]) -> ChatResult:

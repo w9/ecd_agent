@@ -173,6 +173,47 @@ def test_run_agent_uses_tool_results(ctx: ToolContext, monkeypatch: pytest.Monke
     assert response.source == "sites"
     assert "8.3" in response.answer
     assert response.citations[0].site_id == "SITE-001"
+    assert response.llm_debug is None
+
+
+def test_run_agent_includes_llm_debug(ctx: ToolContext, monkeypatch: pytest.MonkeyPatch) -> None:
+    turns = [
+        ChatResult(
+            tool_calls=[
+                ToolCall(
+                    id="c1",
+                    name="get_site_metric",
+                    arguments={
+                        "site_id": "SITE-001",
+                        "field": "monthly_enrollment_rate",
+                    },
+                )
+            ],
+            debug_request={"model": "debug", "messages": ["turn-1"]},
+            debug_response={"id": "resp-1"},
+        ),
+        ChatResult(
+            content="The monthly enrollment rate for SITE-001 is 8.3.",
+            debug_request={"model": "debug", "messages": ["turn-2"]},
+            debug_response={"id": "resp-2"},
+        ),
+    ]
+
+    def fake_chat(*args: object, **kwargs: object) -> ChatResult:
+        return turns.pop(0)
+
+    monkeypatch.setattr("app.llm.chat", fake_chat)
+    response = run_agent(
+        "What is the enrollment rate for SITE-001?",
+        None,
+        sites_db_path=ctx.sites_db_path,
+        protocols_db_path=ctx.protocols_db_path,
+    )
+    assert response.llm_debug is not None
+    assert len(response.llm_debug) == 2
+    assert response.llm_debug[0].request["messages"] == ["turn-1"]
+    assert response.llm_debug[0].response == {"id": "resp-1"}
+    assert response.llm_debug[1].request["messages"] == ["turn-2"]
 
 
 def test_run_agent_llm_error_is_not_swallowed(

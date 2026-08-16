@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -47,8 +47,14 @@ class Citation(BaseModel):
     section: str | None = None
 
 
+class LlmDebugExchange(BaseModel):
+    request: dict[str, Any]
+    response: dict[str, Any]
+
+
 class QueryResponse(BaseModel):
     answer: str
     route: Route
     source: Source
     citations: list[Citation] = Field(default_factory=list)
+    llm_debug: list[LlmDebugExchange] | None = None
