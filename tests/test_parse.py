@@ -1,6 +1,6 @@
 """Tests for ClinicalTrials.gov JSON flattening."""
 
-from app.rag.parse import parse_study
+from app.rag.parse import CachedProtocol, list_cached_protocols, parse_study
 
 SAMPLE_STUDY = {
     "protocolSection": {
@@ -132,3 +132,20 @@ def test_parse_study_skips_empty_modules() -> None:
         }
     }
     assert parse_study(payload) == []
+
+
+def test_list_cached_protocols_reads_identity_and_skips_junk(tmp_path) -> None:
+    good = tmp_path / "NCT00000001.json"
+    good.write_text(
+        '{"protocolSection":{"identificationModule":'
+        '{"nctId":"NCT00000001","briefTitle":"Toy vaccine study"}}}',
+        encoding="utf-8",
+    )
+    (tmp_path / "broken.json").write_text("{not-json", encoding="utf-8")
+    (tmp_path / "NCT04516746.json").write_text("[]", encoding="utf-8")
+
+    assert list_cached_protocols(tmp_path) == [
+        CachedProtocol(nct_id="NCT00000001", brief_title="Toy vaccine study"),
+        CachedProtocol(nct_id="NCT04516746", brief_title=""),
+    ]
+    assert list_cached_protocols(tmp_path / "missing") == []

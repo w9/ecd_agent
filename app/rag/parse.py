@@ -29,6 +29,17 @@ class ProtocolSection:
     text: str
 
 
+@dataclass(frozen=True)
+class CachedProtocol:
+    """Identity fields for a cached CT.gov JSON file, used by the dev chat UI."""
+
+    nct_id: str
+    brief_title: str
+
+
+_NCT_FILENAME = re.compile(r"^NCT\d{8}$", re.IGNORECASE)
+
+
 def parse_study_file(path: Path | str) -> list[ProtocolSection]:
     """Load a cached CT.gov JSON file and flatten useful sections."""
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -80,6 +91,27 @@ def iter_protocol_files(protocols_dir: Path | str) -> list[Path]:
     if not directory.is_dir():
         return []
     return sorted(path for path in directory.glob("*.json") if path.is_file())
+
+
+def list_cached_protocols(protocols_dir: Path | str) -> list[CachedProtocol]:
+    """Return nct_id + brief title for each cached study JSON (skips unreadable files)."""
+    found: list[CachedProtocol] = []
+    for path in iter_protocol_files(protocols_dir):
+        nct_id = ""
+        brief_title = ""
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            payload = None
+        if isinstance(payload, dict):
+            ident = (payload.get("protocolSection") or {}).get("identificationModule") or {}
+            nct_id = str(ident.get("nctId") or "").strip().upper()
+            brief_title = str(ident.get("briefTitle") or "").strip()
+        if not nct_id and _NCT_FILENAME.fullmatch(path.stem):
+            nct_id = path.stem.upper()
+        if nct_id:
+            found.append(CachedProtocol(nct_id=nct_id, brief_title=brief_title))
+    return found
 
 
 def _flatten_conditions(module: dict[str, Any]) -> str:
