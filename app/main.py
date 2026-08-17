@@ -1,9 +1,6 @@
 """FastAPI application: health check plus the feasibility query API."""
 
-from pathlib import Path
-
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
 
 from app.config import get_settings
 from app.llm import LLMError
@@ -12,7 +9,6 @@ from app.rag.parse import CachedProtocol, list_cached_protocols
 from app.schemas import QueryRequest, QueryResponse
 
 settings = get_settings()
-_CHAT_PAGE = Path(__file__).resolve().parent / "static" / "chat.html"
 
 app = FastAPI(
     title=settings.app_name,
@@ -31,15 +27,9 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/chat")
-def chat() -> FileResponse:
-    """Local one-shot chat UI for exercising POST /query."""
-    return FileResponse(_CHAT_PAGE, media_type="text/html")
-
-
 @app.get("/protocols")
 def protocols() -> list[CachedProtocol]:
-    """Cached study IDs for the /chat NCT dropdown."""
+    """Cached study IDs for the chat UI NCT dropdown."""
     return list_cached_protocols(settings.protocols_dir)
 
 

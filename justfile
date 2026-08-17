@@ -26,12 +26,18 @@ env:
         echo "Created .env from .env.example — add LLM credentials if needed"
     fi
 
-# Install deps and ensure .env exists
+# Install Python deps, ensure .env exists, and install the chat UI
 setup: sync env
+    npm --prefix web install
 
-# Run the FastAPI app with reload + LLM debug (chat UI: http://127.0.0.1:8000/chat)
+# Run the FastAPI app with reload + LLM debug
+# Chat UI is a separate Vite app: `just chat` → http://127.0.0.1:5173
 dev:
     LLM_DEBUG=true uv run uvicorn app.main:app --reload --host {{ host }} --port {{ port }}
+
+# Run the Vite + React chat UI (proxies /query and /protocols to the API)
+chat:
+    npm --prefix web run dev
 
 # Run the FastAPI app without reload (production-like)
 prod:

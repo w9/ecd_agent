@@ -35,6 +35,10 @@ env/
 data/**
 !data/.gitkeep
 
+# Vite chat UI
+web/node_modules/
+web/dist/
+
 # OS / misc
 *.log
 .cache/

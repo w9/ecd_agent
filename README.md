@@ -44,6 +44,19 @@ curl http://127.0.0.1:8000/health
 
 Interactive docs (optional): http://127.0.0.1:8000/docs
 
+## Local chat UI
+
+The chat front end is a separate Vite + React + shadcn/ui app in `web/`. It talks to `POST /query` and `GET /protocols` through a Vite proxy.
+
+```bash
+# terminal 1 — API
+just dev
+
+# terminal 2 — chat UI (first time: cd web && npm install)
+just chat
+# http://127.0.0.1:5173
+```
+
 ## Fetch public protocol data
 
 Downloads ClinicalTrials.gov API v2 JSON into `data/protocols/`:

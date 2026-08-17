@@ -1,4 +1,4 @@
-"""Dev chat page and cached-protocol dropdown API."""
+"""Cached-protocol dropdown API used by the separate chat UI."""
 
 from fastapi.testclient import TestClient
 
@@ -8,19 +8,9 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_chat_page_returns_html() -> None:
+def test_chat_page_is_removed() -> None:
     response = client.get("/chat")
-    assert response.status_code == 200
-    assert "text/html" in response.headers["content-type"]
-    assert "POST /query" in response.text
-    assert 'id="nct"' in response.text
-    assert 'id="sample-category"' in response.text
-    assert 'id="sample-question"' in response.text
-    assert "Site metrics" in response.text
-    assert "What is the enrollment rate for SITE-001?" in response.text
-    assert "Out of scope" in response.text
-    assert "debug-card" in response.text
-    assert "navigator.clipboard.writeText" in response.text
+    assert response.status_code == 404
 
 
 def test_protocols_lists_cached_studies(tmp_path, monkeypatch) -> None:
