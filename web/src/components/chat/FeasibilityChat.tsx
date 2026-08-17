@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react"
-import { CopyIcon } from "lucide-react"
+import { ChevronRightIcon, CopyIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Label } from "@/components/ui/label"
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
 import { Message, MessageContent, MessageFooter, MessageHeader } from "@/components/ui/message"
@@ -66,7 +66,7 @@ const CATEGORY_ITEMS = SAMPLE_GROUPS.map((group, index) => ({
   label: group.label,
 }))
 
-function DebugCard({ title, payload }: { title: string; payload: unknown }) {
+function DebugMarker({ title, payload }: { title: string; payload: unknown }) {
   const text = JSON.stringify(payload ?? {}, null, 2)
   const [copied, setCopied] = useState(false)
 
@@ -81,34 +81,37 @@ function DebugCard({ title, payload }: { title: string; payload: unknown }) {
   }
 
   return (
-    <Card size="sm" className="bg-muted/40">
-      <CardHeader className="flex flex-row items-center justify-between gap-2">
-        <CardTitle className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          {title}
-        </CardTitle>
-        <Button type="button" variant="outline" size="xs" onClick={copy}>
-          <CopyIcon />
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <pre className="max-h-60 overflow-auto rounded-lg bg-background p-3 font-mono text-xs leading-relaxed whitespace-pre">
+    <Collapsible defaultOpen={false} className="group/debug w-full">
+      <Marker render={<CollapsibleTrigger className="w-full" />}>
+        <MarkerIcon>
+          <ChevronRightIcon className="transition-transform group-data-open/debug:rotate-90" />
+        </MarkerIcon>
+        <MarkerContent>{title}</MarkerContent>
+      </Marker>
+      <CollapsibleContent className="pt-2 pl-6">
+        <div className="mb-2 flex justify-end">
+          <Button type="button" variant="outline" size="xs" onClick={copy}>
+            <CopyIcon />
+            {copied ? "Copied" : "Copy"}
+          </Button>
+        </div>
+        <pre className="max-h-60 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre">
           {text}
         </pre>
-      </CardContent>
-    </Card>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
 function DebugList({ exchanges }: { exchanges: LlmDebugExchange[] }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {exchanges.map((exchange, index) => {
         const suffix = exchanges.length > 1 ? ` ${index + 1}` : ""
         return (
-          <div key={index} className="flex flex-col gap-3">
-            <DebugCard title={`LLM request${suffix}`} payload={exchange.request} />
-            <DebugCard title={`LLM response${suffix}`} payload={exchange.response} />
+          <div key={index} className="flex flex-col gap-2">
+            <DebugMarker title={`LLM request${suffix}`} payload={exchange.request} />
+            <DebugMarker title={`LLM response${suffix}`} payload={exchange.response} />
           </div>
         )
       })}
@@ -255,6 +258,11 @@ export function FeasibilityChat() {
 
                   {thread.status === "ready" ? (
                     <>
+                      {thread.response.llm_debug?.length ? (
+                        <MessageScrollerItem messageId="debug">
+                          <DebugList exchanges={thread.response.llm_debug} />
+                        </MessageScrollerItem>
+                      ) : null}
                       <MessageScrollerItem messageId="assistant">
                         <Message>
                           <MessageContent>
@@ -281,11 +289,6 @@ export function FeasibilityChat() {
                           </MessageContent>
                         </Message>
                       </MessageScrollerItem>
-                      {thread.response.llm_debug?.length ? (
-                        <MessageScrollerItem messageId="debug">
-                          <DebugList exchanges={thread.response.llm_debug} />
-                        </MessageScrollerItem>
-                      ) : null}
                     </>
                   ) : null}
                 </>
