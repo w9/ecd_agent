@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import { MarkdownAnswer } from "@/components/chat/MarkdownAnswer"
 import { SAMPLE_GROUPS, type SampleItem } from "@/data/samples"
 import {
   ApiError,
@@ -249,8 +250,8 @@ export function FeasibilityChat() {
                           <MessageContent>
                             <MessageHeader>Assistant</MessageHeader>
                             <Bubble variant="muted">
-                              <BubbleContent className="whitespace-pre-wrap">
-                                {thread.response.answer}
+                              <BubbleContent>
+                                <MarkdownAnswer>{thread.response.answer}</MarkdownAnswer>
                               </BubbleContent>
                             </Bubble>
                             <MessageFooter className="flex-wrap gap-1.5 px-0">
