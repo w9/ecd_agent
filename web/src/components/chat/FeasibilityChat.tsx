@@ -26,7 +26,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { MarkdownAnswer } from "@/components/chat/MarkdownAnswer"
-import { SAMPLE_GROUPS, type SampleItem } from "@/data/samples"
+import { lookupSample, SAMPLE_GROUPS, type SampleItem } from "@/data/samples"
 import {
   ApiError,
   citationLabel,
@@ -178,16 +178,11 @@ export function FeasibilityChat() {
     }
   }
 
+  const expected =
+    thread.status === "empty" ? undefined : lookupSample(thread.query, thread.nctId)?.expected
+
   return (
     <div className="mx-auto flex h-svh w-full max-w-3xl flex-col border-x bg-background">
-      <header className="border-b px-5 py-4">
-        <h1 className="text-base font-semibold tracking-tight">Clinical site feasibility</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Local one-shot UI for <code className="font-mono text-xs">POST /query</code>. History is
-          not kept.
-        </p>
-      </header>
-
       <MessageScrollerProvider>
         <MessageScroller className="flex-1">
           <MessageScrollerViewport>
@@ -219,6 +214,21 @@ export function FeasibilityChat() {
                       </MessageContent>
                     </Message>
                   </MessageScrollerItem>
+
+                  {expected ? (
+                    <MessageScrollerItem messageId="expected">
+                      <Message>
+                        <MessageContent>
+                          <MessageHeader>Expected</MessageHeader>
+                          <Bubble variant="outline">
+                            <BubbleContent>
+                              <MarkdownAnswer>{expected}</MarkdownAnswer>
+                            </BubbleContent>
+                          </Bubble>
+                        </MessageContent>
+                      </Message>
+                    </MessageScrollerItem>
+                  ) : null}
 
                   {thread.status === "pending" ? (
                     <MessageScrollerItem messageId="pending">
