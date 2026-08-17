@@ -39,6 +39,14 @@ import {
 } from "@/lib/api"
 
 const MAX_QUERY_LENGTH = 8000
+const MAX_TOOL_ARGS_PREVIEW = 88
+
+type ToolCallView = {
+  id: string
+  name: string
+  arguments: unknown
+  result?: unknown
+}
 
 type Thread =
   | { status: "empty" }
@@ -65,6 +73,101 @@ const CATEGORY_ITEMS = SAMPLE_GROUPS.map((group, index) => ({
   value: String(index),
   label: group.label,
 }))
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function parseToolArguments(raw: unknown): unknown {
+  if (raw == null || raw === "") return {}
+  if (typeof raw === "object") return raw
+  if (typeof raw !== "string") return raw
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return raw
+  }
+}
+
+function compactJson(value: unknown): string {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function ellide(text: string, max: number): string {
+  if (text.length <= max) return text
+  return `${text.slice(0, Math.max(0, max - 1))}…`
+}
+
+function toolCallTitle(name: string, args: unknown): string {
+  return `${name} ${ellide(compactJson(args), MAX_TOOL_ARGS_PREVIEW)}`
+}
+
+function toolCallsFromMessage(message: unknown): ToolCallView[] {
+  const record = asRecord(message)
+  const raw = record?.tool_calls
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item, index) => {
+    const call = asRecord(item)
+    const fn = asRecord(call?.function)
+    const name = typeof fn?.name === "string" && fn.name.trim() ? fn.name.trim() : null
+    if (!name) return []
+    const id = typeof call?.id === "string" && call.id.trim() ? call.id : `${name}-${index}`
+    return [{ id, name, arguments: parseToolArguments(fn?.arguments) }]
+  })
+}
+
+function toolCallsFromResponse(response: Record<string, unknown>): ToolCallView[] {
+  const choices = response.choices
+  if (!Array.isArray(choices) || !choices.length) return []
+  return toolCallsFromMessage(asRecord(choices[0])?.message)
+}
+
+function toolCallsFromRequest(request: Record<string, unknown>): ToolCallView[] {
+  const messages = request.messages
+  if (!Array.isArray(messages)) return []
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = asRecord(messages[index])
+    if (message?.role !== "assistant") continue
+    const calls = toolCallsFromMessage(message)
+    if (calls.length) return calls
+  }
+  return []
+}
+
+function toolResultsFromRequest(request: Record<string, unknown>): Map<string, unknown> {
+  const results = new Map<string, unknown>()
+  const messages = request.messages
+  if (!Array.isArray(messages)) return results
+  for (const item of messages) {
+    const message = asRecord(item)
+    if (message?.role !== "tool") continue
+    const id = typeof message.tool_call_id === "string" ? message.tool_call_id : null
+    if (!id) continue
+    results.set(id, parseToolArguments(message.content))
+  }
+  return results
+}
+
+function toolCallsForExchange(
+  exchanges: LlmDebugExchange[],
+  index: number,
+): ToolCallView[] {
+  const exchange = exchanges[index]
+  const fromResponse = toolCallsFromResponse(exchange.response)
+  const nextRequest = exchanges[index + 1]?.request
+  const fromNextRequest = nextRequest ? toolCallsFromRequest(nextRequest) : []
+  const calls = fromResponse.length ? fromResponse : fromNextRequest
+  const results = nextRequest ? toolResultsFromRequest(nextRequest) : new Map<string, unknown>()
+  return calls.map((call) =>
+    results.has(call.id) ? { ...call, result: results.get(call.id) } : call,
+  )
+}
 
 function DebugMarker({ title, payload }: { title: string; payload: unknown }) {
   const text = JSON.stringify(payload ?? {}, null, 2)
@@ -130,10 +233,22 @@ function DebugList({ exchanges }: { exchanges: LlmDebugExchange[] }) {
     <div className="flex flex-col gap-2">
       {exchanges.map((exchange, index) => {
         const suffix = exchanges.length > 1 ? ` ${index + 1}` : ""
+        const toolCalls = toolCallsForExchange(exchanges, index)
         return (
           <div key={index} className="flex flex-col gap-2">
             <DebugMarker title={`LLM request${suffix}`} payload={exchange.request} />
             <DebugMarker title={`LLM response${suffix}`} payload={exchange.response} />
+            {toolCalls.map((call) => (
+              <DebugMarker
+                key={call.id}
+                title={toolCallTitle(call.name, call.arguments)}
+                payload={{
+                  name: call.name,
+                  arguments: call.arguments,
+                  ...(call.result !== undefined ? { result: call.result } : {}),
+                }}
+              />
+            ))}
           </div>
         )
       })}
