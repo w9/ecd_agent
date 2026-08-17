@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import { SAMPLE_GROUPS } from "@/data/samples"
+import { SAMPLE_GROUPS, type SampleItem } from "@/data/samples"
 import {
   ApiError,
   citationLabel,
@@ -55,6 +55,15 @@ const ROUTE_BADGE: Record<Route, string> = {
 function protocolLabel(item: CachedProtocol): string {
   return item.brief_title ? `${item.nct_id} — ${item.brief_title}` : item.nct_id
 }
+
+function sampleLabel(item: SampleItem): string {
+  return item.nct ? `${item.query}  ·  ${item.nct}` : item.query
+}
+
+const CATEGORY_ITEMS = SAMPLE_GROUPS.map((group, index) => ({
+  value: String(index),
+  label: group.label,
+}))
 
 function DebugCard({ title, payload }: { title: string; payload: unknown }) {
   const text = JSON.stringify(payload ?? {}, null, 2)
@@ -125,6 +134,17 @@ export function FeasibilityChat() {
 
   const protocolOptions = [...protocols, ...extraProtocols]
   const selectedGroup = category ? SAMPLE_GROUPS[Number(category)] : undefined
+  const sampleItems = (selectedGroup?.items ?? []).map((item, index) => ({
+    value: String(index),
+    label: sampleLabel(item),
+  }))
+  const protocolItems = [
+    { value: null, label: "None" },
+    ...protocolOptions.map((item) => ({
+      value: item.nct_id,
+      label: protocolLabel(item),
+    })),
+  ]
   const sending = thread.status === "pending"
 
   function applySample(item: { query: string; nct: string }) {
@@ -271,6 +291,7 @@ export function FeasibilityChat() {
             <Label htmlFor="sample-category">Sample category</Label>
             <Select
               value={category}
+              items={CATEGORY_ITEMS}
               onValueChange={(value) => {
                 setCategory(value)
                 setSample(null)
@@ -280,9 +301,9 @@ export function FeasibilityChat() {
                 <SelectValue placeholder="Select a category…" />
               </SelectTrigger>
               <SelectContent align="start" alignItemWithTrigger={false} className="min-w-56">
-                {SAMPLE_GROUPS.map((group, index) => (
-                  <SelectItem key={group.label} value={String(index)}>
-                    {group.label}
+                {CATEGORY_ITEMS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -292,6 +313,7 @@ export function FeasibilityChat() {
             <Label htmlFor="sample-question">Sample question</Label>
             <Select
               value={sample}
+              items={sampleItems}
               disabled={!selectedGroup}
               onValueChange={(value) => {
                 setSample(value)
@@ -303,13 +325,9 @@ export function FeasibilityChat() {
                 <SelectValue placeholder="Select a sample…" />
               </SelectTrigger>
               <SelectContent align="start" alignItemWithTrigger={false} className="min-w-72">
-                {selectedGroup?.items.map((item, index) => (
-                  <SelectItem
-                    key={`${item.query}-${item.nct}`}
-                    value={String(index)}
-                    className="whitespace-normal"
-                  >
-                    {item.nct ? `${item.query}  ·  ${item.nct}` : item.query}
+                {sampleItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value} className="whitespace-normal">
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -320,15 +338,18 @@ export function FeasibilityChat() {
         <form className="grid gap-3" onSubmit={onSubmit}>
           <div className="grid gap-1.5">
             <Label htmlFor="nct">Attached protocol</Label>
-            <Select value={nctId} onValueChange={setNctId}>
+            <Select value={nctId} items={protocolItems} onValueChange={setNctId}>
               <SelectTrigger id="nct" className="w-full min-w-0">
                 <SelectValue placeholder="None" />
               </SelectTrigger>
               <SelectContent align="start" alignItemWithTrigger={false} className="min-w-72">
-                <SelectItem value={null}>None</SelectItem>
-                {protocolOptions.map((item) => (
-                  <SelectItem key={item.nct_id} value={item.nct_id} className="whitespace-normal">
-                    {protocolLabel(item)}
+                {protocolItems.map((item) => (
+                  <SelectItem
+                    key={item.value ?? "none"}
+                    value={item.value}
+                    className="whitespace-normal"
+                  >
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>
