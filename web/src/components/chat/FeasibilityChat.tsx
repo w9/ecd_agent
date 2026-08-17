@@ -103,6 +103,28 @@ function DebugMarker({ title, payload }: { title: string; payload: unknown }) {
   )
 }
 
+function sessionPayload(thread: Thread, expected: string | undefined) {
+  if (thread.status === "empty" || thread.status === "pending") return null
+
+  const input = { query: thread.query, nct_id: thread.nctId }
+  if (thread.status === "error") {
+    return {
+      input,
+      ...(expected ? { expected } : {}),
+      llm_debug: null,
+      response: { error: thread.message },
+    }
+  }
+
+  const { answer, route, source, citations, llm_debug } = thread.response
+  return {
+    input,
+    ...(expected ? { expected } : {}),
+    llm_debug: llm_debug ?? null,
+    response: { answer, route, source, citations },
+  }
+}
+
 function DebugList({ exchanges }: { exchanges: LlmDebugExchange[] }) {
   return (
     <div className="flex flex-col gap-2">
@@ -126,6 +148,7 @@ export function FeasibilityChat() {
   const [sample, setSample] = useState<string | null>(null)
   const [protocols, setProtocols] = useState<CachedProtocol[]>([])
   const [thread, setThread] = useState<Thread>({ status: "empty" })
+  const [sessionCopied, setSessionCopied] = useState(false)
 
   useEffect(() => {
     void listProtocols().then(setProtocols)
@@ -183,6 +206,18 @@ export function FeasibilityChat() {
 
   const expected =
     thread.status === "empty" ? undefined : lookupSample(thread.query, thread.nctId)?.expected
+  const exportable = sessionPayload(thread, expected)
+
+  async function copySession() {
+    if (!exportable) return
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(exportable, null, 2))
+      setSessionCopied(true)
+    } catch {
+      setSessionCopied(false)
+    }
+    window.setTimeout(() => setSessionCopied(false), 1200)
+  }
 
   return (
     <div className="mx-auto flex h-svh w-full max-w-3xl flex-col border-x bg-background">
@@ -387,6 +422,15 @@ export function FeasibilityChat() {
             </Button>
           </div>
         </form>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!exportable}
+          onClick={() => void copySession()}
+        >
+          <CopyIcon />
+          {sessionCopied ? "Copied session JSON" : "Copy session JSON"}
+        </Button>
       </div>
     </div>
   )
