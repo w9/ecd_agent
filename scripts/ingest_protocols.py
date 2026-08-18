@@ -45,7 +45,8 @@ def main() -> int:
     by_nct = Counter(chunk.nct_id for chunk in chunks)
     by_section = Counter(chunk.section for chunk in chunks)
     print(f"Wrote {len(chunks)} chunks from {len(by_nct)} studies to {args.db}")
-    print("  tables: protocol_chunks (content), protocol_chunks_fts (FTS5)")
+    print("  tables: protocol_chunks (content), protocol_chunks_fts (FTS5),")
+    print("          protocol_documents (raw CT.gov JSON)")
     print("Per study:")
     for nct_id, count in sorted(by_nct.items()):
         print(f"  {nct_id}: {count} chunks")

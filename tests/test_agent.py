@@ -11,7 +11,7 @@ from app.agent.loop import run_agent
 from app.agent.tools import ToolContext, execute_tool
 from app.llm import ChatResult, LLMError, ToolCall
 from app.rag.chunk import Chunk
-from app.rag.store import save_chunks
+from app.rag.store import ProtocolDocument, save_chunks, save_documents
 from app.schemas import QueryRequest
 from app.query import handle_query
 
@@ -68,11 +68,29 @@ def _protocols_db(path: Path) -> Path:
     return path
 
 
+def _protocol_docs(path: Path) -> Path:
+    save_documents(
+        path,
+        [
+            ProtocolDocument(
+                nct_id="NCT04516746",
+                brief_title="Oncology feasibility study",
+                document={
+                    "protocolSection": {
+                        "eligibilityModule": {"minimumAge": "18 Years", "sex": "ALL"},
+                    }
+                },
+            )
+        ],
+    )
+    return path
+
+
 @pytest.fixture
 def ctx(tmp_path: Path) -> ToolContext:
     return ToolContext(
         sites_db_path=_sites_db(tmp_path / "sites.db"),
-        protocols_db_path=_protocols_db(tmp_path / "protocols.db"),
+        protocols_db_path=_protocol_docs(_protocols_db(tmp_path / "protocols.db")),
     )
 
 
@@ -150,6 +168,35 @@ def test_search_protocol_reports_scoped_when_nct_passed(ctx: ToolContext) -> Non
     assert result["scoped_to_nct"] is True
     assert result["nct_id"] == "NCT04516746"
     assert result["chunks"]
+
+
+def test_get_protocol_field_and_filter_sites_dispatch(ctx: ToolContext) -> None:
+    field = execute_tool(
+        "get_protocol_field",
+        {
+            "path": "protocolSection.eligibilityModule.minimumAge",
+            "nct_id": "NCT04516746",
+        },
+        ctx,
+    )
+    assert field["scoped_to_nct"] is True
+    assert field["results"][0]["value"] == "18 Years"
+
+    page = execute_tool(
+        "filter_sites",
+        {
+            "filters": [
+                {"field": "therapeutic_area", "op": "eq", "value": "Oncology"},
+                {"field": "monthly_enrollment_rate", "op": "gt", "value": 8},
+            ],
+            "offset": 0,
+            "limit": 5,
+        },
+        ctx,
+    )
+    assert [row["site_id"] for row in page["sites"]] == ["SITE-001", "SITE-007"]
+    assert page["total"] == 2
+    assert page["has_more"] is False
 
 
 def test_run_agent_uses_tool_results(ctx: ToolContext, monkeypatch: pytest.MonkeyPatch) -> None:

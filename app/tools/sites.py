@@ -17,6 +17,18 @@ SITE_FIELDS = (
     "therapeutic_area",
 )
 
+FILTER_EQ_FIELDS = frozenset({"country", "region", "therapeutic_area"})
+FILTER_COMPARE_FIELDS = frozenset(
+    {"monthly_enrollment_rate", "active_trials", "remaining_slots"}
+)
+FILTER_OPS = {
+    "eq": "=",
+    "gt": ">",
+    "gte": ">=",
+    "lt": "<",
+    "lte": "<=",
+}
+
 
 def lookup_site(site_id: str, *, db_path: Path | str) -> dict[str, Any] | None:
     """Return one site row, or None if the id or database is missing."""
@@ -53,6 +65,77 @@ def list_sites(
     else:
         rows = _fetch_all(db_path, "SELECT * FROM sites", ())
     return [_normalize(row) for row in rows]
+
+
+def filter_sites(
+    *,
+    db_path: Path | str,
+    filters: list[dict[str, Any]] | None = None,
+    offset: int = 0,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """Return matching site rows with AND filters and offset/limit paging."""
+    clauses, params = _filter_clauses(filters or [])
+    where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    total_row = _fetch_one(db_path, f"SELECT COUNT(*) AS n FROM sites{where}", tuple(params))
+    total = int(total_row["n"]) if total_row is not None else 0
+    rows = _fetch_all(
+        db_path,
+        f"SELECT * FROM sites{where} ORDER BY site_id LIMIT ? OFFSET ?",
+        (*params, limit, offset),
+    )
+    sites = [_normalize(row) for row in rows]
+    return {
+        "sites": sites,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(sites) < total,
+        "filters": filters or [],
+    }
+
+
+def _filter_clauses(filters: list[dict[str, Any]]) -> tuple[list[str], list[object]]:
+    clauses: list[str] = []
+    params: list[object] = []
+    for item in filters:
+        field = item.get("field")
+        op = item.get("op")
+        value = item.get("value")
+        if field not in FILTER_EQ_FIELDS and field not in FILTER_COMPARE_FIELDS:
+            raise ValueError(f"unsupported filter field: {field}")
+        if op not in FILTER_OPS:
+            raise ValueError(f"unsupported filter op: {op}")
+        if field in FILTER_EQ_FIELDS and op != "eq":
+            raise ValueError(f"{field} only supports op=eq")
+        if field in FILTER_COMPARE_FIELDS:
+            number = _as_number(value)
+            clauses.append(f"{field} {FILTER_OPS[op]} ?")
+            params.append(number)
+            continue
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field} filter value must be a non-empty string")
+        clauses.append(f"{field} = ? COLLATE NOCASE")
+        params.append(value.strip())
+    return clauses, params
+
+
+def _as_number(value: object) -> float | int:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise ValueError("numeric filter value must be a number")
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("numeric filter value must be a number")
+        try:
+            return int(stripped) if stripped.isdigit() or (
+                stripped.startswith("-") and stripped[1:].isdigit()
+            ) else float(stripped)
+        except ValueError as exc:
+            raise ValueError("numeric filter value must be a number") from exc
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
 
 
 def rank_sites(

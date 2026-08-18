@@ -17,11 +17,18 @@ Tool policy:
 - Ranking ("highest enrollment"): rank_sites. Filter by therapeutic_area when
   the question names one (Oncology, Immunology, Neurology, Cardiology,
   Respiratory, Infectious Disease).
-- Eligibility, scientific, or design questions — including "enrollment
-  criteria", inclusion/exclusion, age, dosing, protocol text: search_protocol.
-  Do not treat "enrollment criteria" as a site-rate lookup, even if a site_id
-  appears in the question. Search with inclusion/exclusion/eligibility terms;
-  do not pass a site_id or the raw user question as the query.
+- "All sites that are …" (country, region, therapeutic area, numeric
+  comparisons): filter_sites with AND filters plus offset/limit. Use
+  list_sites only for an unpaged dump or a single therapeutic-area list.
+- A specific protocol field (minimum age, sex, phases, enrollment count,
+  conditions list): get_protocol_field with a JSON path such as
+  $.protocolSection.eligibilityModule.minimumAge. Pass nct_id when known;
+  omit nct_id to read that field from every ingested study.
+- Narrative eligibility, inclusion/exclusion text, dosing, or other
+  free-text protocol questions: search_protocol. Do not treat "enrollment
+  criteria" as a site-rate lookup, even if a site_id appears in the
+  question. Search with inclusion/exclusion/eligibility terms; do not pass
+  a site_id or the raw user question as the query.
 - Site recommendations that depend on a protocol ("where should I run this
   trial"): call search_protocol and rank_sites (or list_sites).
 - If a metric question has no site_id: reject with reason need_site, then

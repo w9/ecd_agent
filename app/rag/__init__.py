@@ -3,8 +3,21 @@
 from pathlib import Path
 
 from app.rag.chunk import Chunk, chunk_section, chunk_sections
-from app.rag.parse import ProtocolSection, iter_protocol_files, parse_study, parse_study_file
-from app.rag.store import load_chunks_from_path, save_chunks, search_chunks_from_path
+from app.rag.parse import (
+    ProtocolSection,
+    iter_protocol_files,
+    load_study_payload,
+    parse_study,
+    parse_study_file,
+    study_identity,
+)
+from app.rag.store import (
+    ProtocolDocument,
+    load_chunks_from_path,
+    save_chunks,
+    save_documents,
+    search_chunks_from_path,
+)
 
 
 def ingest_protocol_dir(protocols_dir: Path | str) -> list[Chunk]:
@@ -15,25 +28,44 @@ def ingest_protocol_dir(protocols_dir: Path | str) -> list[Chunk]:
     return chunks
 
 
+def ingest_protocol_documents(protocols_dir: Path | str) -> list[ProtocolDocument]:
+    """Load raw cached CT.gov JSON documents for SQLite JSON storage."""
+    documents: list[ProtocolDocument] = []
+    for path in iter_protocol_files(protocols_dir):
+        payload = load_study_payload(path)
+        nct_id, brief_title = study_identity(payload, fallback_nct=path.stem)
+        if not nct_id:
+            raise ValueError(f"Study JSON is missing nctId: {path}")
+        documents.append(
+            ProtocolDocument(nct_id=nct_id, brief_title=brief_title, document=payload)
+        )
+    return documents
+
+
 def persist_protocol_dir(
     protocols_dir: Path | str,
     db_path: Path | str,
 ) -> list[Chunk]:
-    """Parse, chunk, and replace SQLite content rows at ``db_path``."""
-    return save_chunks(db_path, ingest_protocol_dir(protocols_dir))
+    """Parse, chunk, store raw JSON documents, and replace SQLite rows."""
+    chunks = save_chunks(db_path, ingest_protocol_dir(protocols_dir))
+    save_documents(db_path, ingest_protocol_documents(protocols_dir))
+    return chunks
 
 
 __all__ = [
     "Chunk",
+    "ProtocolDocument",
     "ProtocolSection",
     "chunk_section",
     "chunk_sections",
     "ingest_protocol_dir",
+    "ingest_protocol_documents",
     "iter_protocol_files",
     "load_chunks_from_path",
     "parse_study",
     "parse_study_file",
     "persist_protocol_dir",
     "save_chunks",
+    "save_documents",
     "search_chunks_from_path",
 ]

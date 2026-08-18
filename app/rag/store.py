@@ -1,15 +1,21 @@
-"""Persist protocol chunks in SQLite with a separate FTS5 index.
+"""Persist protocol chunks and raw CT.gov JSON in SQLite.
 
 ``protocol_chunks`` is the content table (stable INTEGER primary key ``id``).
 ``protocol_chunks_fts`` is an external-content FTS5 virtual table that uses
 ``content='protocol_chunks'`` and ``content_rowid='id'``. Triggers keep the
 index in sync; a rebuild after bulk replace is the safety net.
+
+``protocol_documents`` stores one raw ClinicalTrials.gov JSON document per NCT
+so tools can ``json_extract`` nested fields without re-reading the cache files.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from app.rag.chunk import Chunk
 
@@ -31,6 +37,12 @@ CREATE INDEX IF NOT EXISTS idx_protocol_chunks_nct_id
 
 CREATE INDEX IF NOT EXISTS idx_protocol_chunks_section
     ON protocol_chunks (section);
+
+CREATE TABLE IF NOT EXISTS protocol_documents (
+    nct_id TEXT PRIMARY KEY,
+    brief_title TEXT NOT NULL DEFAULT '',
+    document JSON NOT NULL
+);
 """
 
 FTS_TABLE = "protocol_chunks_fts"
@@ -70,10 +82,42 @@ CREATE TRIGGER protocol_chunks_au AFTER UPDATE ON protocol_chunks BEGIN
 END;
 """
 
+@dataclass(frozen=True)
+class ProtocolDocument:
+    """One cached CT.gov study document stored as JSON."""
+
+    nct_id: str
+    brief_title: str
+    document: dict[str, Any]
+
+
 _INSERT_SQL = """
 INSERT INTO protocol_chunks (
     nct_id, section, chunk_index, brief_title, text, start_char, end_char
 ) VALUES (?, ?, ?, ?, ?, ?, ?)
+"""
+
+_INSERT_DOCUMENT_SQL = """
+INSERT INTO protocol_documents (nct_id, brief_title, document)
+VALUES (?, ?, json(?))
+"""
+
+_SELECT_DOCUMENTS_SQL = """
+SELECT nct_id, brief_title, document
+FROM protocol_documents
+ORDER BY nct_id
+"""
+
+_EXTRACT_SQL = """
+SELECT nct_id, json_extract(document, ?) AS value, json_type(document, ?) AS value_type
+FROM protocol_documents
+ORDER BY nct_id
+"""
+
+_EXTRACT_ONE_SQL = """
+SELECT nct_id, json_extract(document, ?) AS value, json_type(document, ?) AS value_type
+FROM protocol_documents
+WHERE nct_id = ? COLLATE NOCASE
 """
 
 _SELECT_SQL = """
@@ -172,6 +216,60 @@ def save_chunks(db_path: Path | str, chunks: list[Chunk]) -> list[Chunk]:
         conn.close()
 
 
+def replace_documents(
+    conn: sqlite3.Connection, documents: list[ProtocolDocument]
+) -> list[ProtocolDocument]:
+    """Replace all stored CT.gov JSON documents."""
+    init_schema(conn)
+    conn.execute("DELETE FROM protocol_documents")
+    conn.executemany(
+        _INSERT_DOCUMENT_SQL,
+        [
+            (doc.nct_id, doc.brief_title, json.dumps(doc.document, ensure_ascii=False))
+            for doc in documents
+        ],
+    )
+    conn.commit()
+    return load_documents(conn)
+
+
+def load_documents(conn: sqlite3.Connection) -> list[ProtocolDocument]:
+    """Load stored study documents in NCT-ID order."""
+    return [_row_to_document(row) for row in conn.execute(_SELECT_DOCUMENTS_SQL)]
+
+
+def save_documents(
+    db_path: Path | str, documents: list[ProtocolDocument]
+) -> list[ProtocolDocument]:
+    """Write JSON documents to ``db_path``, replacing previous rows."""
+    conn = connect(db_path)
+    try:
+        return replace_documents(conn, documents)
+    finally:
+        conn.close()
+
+
+def extract_json_field(
+    db_path: Path | str,
+    path: str,
+    *,
+    nct_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return ``json_extract`` results for one path, optionally scoped to an NCT."""
+    conn = connect(db_path)
+    try:
+        init_schema(conn)
+        if nct_id:
+            rows = conn.execute(_EXTRACT_ONE_SQL, (path, path, nct_id)).fetchall()
+        else:
+            rows = conn.execute(_EXTRACT_SQL, (path, path)).fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+    return [_extract_payload(row, path) for row in rows]
+
+
 def load_chunks_from_path(db_path: Path | str) -> list[Chunk]:
     """Load content rows from ``db_path``."""
     conn = connect(db_path)
@@ -203,6 +301,45 @@ def _fts_exists(conn: sqlite3.Connection) -> bool:
         (FTS_TABLE,),
     ).fetchone()
     return row is not None
+
+
+def _row_to_document(row: sqlite3.Row) -> ProtocolDocument:
+    raw = row["document"]
+    document = json.loads(raw) if isinstance(raw, str) else raw
+    if not isinstance(document, dict):
+        document = {}
+    return ProtocolDocument(
+        nct_id=row["nct_id"],
+        brief_title=row["brief_title"],
+        document=document,
+    )
+
+
+def _extract_payload(row: sqlite3.Row, path: str) -> dict[str, Any]:
+    value_type = row["value_type"]
+    found = value_type is not None
+    return {
+        "nct_id": row["nct_id"],
+        "path": path,
+        "found": found,
+        "value": _decode_json_extract(row["value"], value_type) if found else None,
+        "json_type": value_type,
+    }
+
+
+def _decode_json_extract(value: Any, value_type: str | None) -> Any:
+    if value_type in {"object", "array"} and isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return value
+    if value_type == "true":
+        return True
+    if value_type == "false":
+        return False
+    if value_type == "null":
+        return None
+    return value
 
 
 def _row_to_chunk(row: sqlite3.Row) -> Chunk:

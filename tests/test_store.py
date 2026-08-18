@@ -3,7 +3,14 @@
 import sqlite3
 
 from app.rag.chunk import Chunk
-from app.rag.store import load_chunks_from_path, save_chunks, search_chunks_from_path
+from app.rag.store import (
+    ProtocolDocument,
+    extract_json_field,
+    load_chunks_from_path,
+    save_chunks,
+    save_documents,
+    search_chunks_from_path,
+)
 
 
 def _chunk(**overrides: object) -> Chunk:
@@ -107,3 +114,88 @@ def test_fts5_search_drops_replaced_content(tmp_path) -> None:
     hits = search_chunks_from_path(db_path, "vaccine")
     assert len(hits) == 1
     assert "mRNA-1273" in hits[0][0].text
+
+
+def _document(**overrides: object) -> ProtocolDocument:
+    payload: dict[str, object] = {
+        "nct_id": "NCT00000001",
+        "brief_title": "Toy vaccine study",
+        "document": {
+            "protocolSection": {
+                "identificationModule": {
+                    "nctId": "NCT00000001",
+                    "briefTitle": "Toy vaccine study",
+                },
+                "eligibilityModule": {
+                    "minimumAge": "18 Years",
+                    "healthyVolunteers": True,
+                    "stdAges": ["ADULT", "OLDER_ADULT"],
+                },
+            }
+        },
+    }
+    payload.update(overrides)
+    return ProtocolDocument(**payload)  # type: ignore[arg-type]
+
+
+def test_save_documents_round_trips_and_extracts_nested_fields(tmp_path) -> None:
+    db_path = tmp_path / "protocols.db"
+    save_documents(db_path, [_document()])
+
+    rows = extract_json_field(
+        db_path, "$.protocolSection.eligibilityModule.minimumAge"
+    )
+    assert rows == [
+        {
+            "nct_id": "NCT00000001",
+            "path": "$.protocolSection.eligibilityModule.minimumAge",
+            "found": True,
+            "value": "18 Years",
+            "json_type": "text",
+        }
+    ]
+
+    ages = extract_json_field(
+        db_path, "$.protocolSection.eligibilityModule.stdAges"
+    )
+    assert ages[0]["found"] is True
+    assert ages[0]["value"] == ["ADULT", "OLDER_ADULT"]
+    assert ages[0]["json_type"] == "array"
+
+
+def test_extract_json_field_can_scope_or_miss(tmp_path) -> None:
+    db_path = tmp_path / "protocols.db"
+    save_documents(
+        db_path,
+        [
+            _document(),
+            _document(
+                nct_id="NCT04516746",
+                brief_title="Other",
+                document={
+                    "protocolSection": {
+                        "eligibilityModule": {"minimumAge": "21 Years"},
+                    }
+                },
+            ),
+        ],
+    )
+
+    scoped = extract_json_field(
+        db_path,
+        "$.protocolSection.eligibilityModule.minimumAge",
+        nct_id="nct04516746",
+    )
+    assert [row["nct_id"] for row in scoped] == ["NCT04516746"]
+    assert scoped[0]["value"] == "21 Years"
+
+    missing = extract_json_field(
+        db_path, "$.protocolSection.designModule.phases", nct_id="NCT00000001"
+    )
+    assert missing[0]["found"] is False
+    assert missing[0]["value"] is None
+
+    unknown = extract_json_field(
+        db_path, "$.protocolSection.eligibilityModule.minimumAge", nct_id="NCT99999999"
+    )
+    assert unknown == []

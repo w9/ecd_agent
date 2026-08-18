@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
 
 from app.rag.chunk import Chunk
-from app.rag.store import load_chunks_from_path, search_chunks_from_path
+from app.rag.store import extract_json_field, load_chunks_from_path, search_chunks_from_path
+
+_JSON_PATH = re.compile(
+    r"^\$"
+    r"(?:\.[A-Za-z_][A-Za-z0-9_]*"
+    r"|\[\d+\])*$"
+)
+MAX_FIELD_CHARS = 24_000
 
 _FTS_TOKEN = re.compile(r"[A-Za-z]{3,}")
 _SITE_ID = re.compile(r"\bSITE-\d+\b", re.I)
@@ -51,6 +59,76 @@ def search_protocol(
     """Return protocol chunks for an NCT ID or an FTS query."""
     chunks = _retrieve_chunks(query, nct_id, db_path, limit=limit)
     return [_chunk_payload(chunk) for chunk in chunks]
+
+
+def get_protocol_field(
+    path: str,
+    *,
+    db_path: Path | str,
+    nct_id: str | None = None,
+) -> dict[str, Any]:
+    """Extract one JSON path from stored CT.gov documents.
+
+    ``nct_id`` is optional: omit it to return the field for every ingested study.
+    """
+    normalized = normalize_json_path(path)
+    results = extract_json_field(db_path, normalized, nct_id=nct_id)
+    if nct_id and not results:
+        results = [
+            {
+                "nct_id": nct_id,
+                "path": normalized,
+                "found": False,
+                "value": None,
+                "json_type": None,
+            }
+        ]
+    capped: list[dict[str, Any]] = []
+    for row in results:
+        capped.append(_cap_field_value(row))
+    return {
+        "path": normalized,
+        "nct_id": nct_id,
+        "scoped_to_nct": bool(nct_id),
+        "results": capped,
+        "site_bound": False,
+        "note": (
+            "Values come from json_extract on the raw CT.gov document. "
+            "Use a dotted path such as "
+            "$.protocolSection.eligibilityModule.minimumAge. "
+            "If scoped_to_nct is false, results include every ingested study."
+        ),
+    }
+
+
+def normalize_json_path(path: str) -> str:
+    """Accept ``$.a.b`` or ``a.b`` and return a SQLite json_extract path."""
+    stripped = path.strip()
+    if not stripped:
+        raise ValueError("path must be a non-empty JSON path")
+    if not stripped.startswith("$"):
+        stripped = f"$.{stripped.lstrip('.')}"
+    if not _JSON_PATH.fullmatch(stripped):
+        raise ValueError(
+            "path must be a JSON path like $.protocolSection.eligibilityModule.minimumAge"
+        )
+    return stripped
+
+
+def _cap_field_value(row: dict[str, Any]) -> dict[str, Any]:
+    value = row.get("value")
+    if value is None:
+        return row
+    encoded = json.dumps(value, ensure_ascii=False, default=str)
+    if len(encoded) <= MAX_FIELD_CHARS:
+        return row
+    capped = dict(row)
+    capped["value"] = None
+    capped["truncated"] = True
+    capped["error"] = (
+        f"value is {len(encoded)} characters; use a more specific path"
+    )
+    return capped
 
 
 def is_eligibility_query(query: str) -> bool:

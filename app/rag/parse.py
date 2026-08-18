@@ -40,10 +40,27 @@ class CachedProtocol:
 _NCT_FILENAME = re.compile(r"^NCT\d{8}$", re.IGNORECASE)
 
 
+def load_study_payload(path: Path | str) -> dict[str, Any]:
+    """Load a cached CT.gov JSON object from disk."""
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Study JSON must be an object: {path}")
+    return payload
+
+
+def study_identity(payload: dict[str, Any], *, fallback_nct: str = "") -> tuple[str, str]:
+    """Return ``(nct_id, brief_title)`` from a CT.gov study document."""
+    ident = (payload.get("protocolSection") or {}).get("identificationModule") or {}
+    nct_id = str(ident.get("nctId") or "").strip().upper()
+    brief_title = str(ident.get("briefTitle") or "").strip()
+    if not nct_id and fallback_nct:
+        nct_id = fallback_nct.strip().upper()
+    return nct_id, brief_title
+
+
 def parse_study_file(path: Path | str) -> list[ProtocolSection]:
     """Load a cached CT.gov JSON file and flatten useful sections."""
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    return parse_study(payload)
+    return parse_study(load_study_payload(path))
 
 
 def parse_study(payload: dict[str, Any]) -> list[ProtocolSection]:
@@ -104,9 +121,7 @@ def list_cached_protocols(protocols_dir: Path | str) -> list[CachedProtocol]:
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             payload = None
         if isinstance(payload, dict):
-            ident = (payload.get("protocolSection") or {}).get("identificationModule") or {}
-            nct_id = str(ident.get("nctId") or "").strip().upper()
-            brief_title = str(ident.get("briefTitle") or "").strip()
+            nct_id, brief_title = study_identity(payload)
         if not nct_id and _NCT_FILENAME.fullmatch(path.stem):
             nct_id = path.stem.upper()
         if nct_id:
