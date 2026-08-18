@@ -1,4 +1,4 @@
-"""Agentic loop: the model chooses tools, then we ground the answer."""
+"""Agentic loop: the model chooses tools and submits the final payload."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import app.llm as llm
-from app.agent.assemble import assemble
 from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.tools import TOOL_SCHEMAS, EvidenceLedger, ToolContext, execute_tool
 from app.llm import ChatResult, LLMError
@@ -52,10 +51,28 @@ def run_agent(
                         "content": json.dumps(payload, default=str),
                     }
                 )
+            if ledger.submitted is not None:
+                return finish(_submitted_response(ledger.submitted))
             continue
-        return finish(assemble(query, ledger, result.content))
+        return finish(
+            QueryResponse(
+                answer=(result.content or "").strip(),
+                route="reject",
+                source="none",
+                citations=[],
+            )
+        )
 
-    return finish(assemble(query, ledger, None))
+    return finish(QueryResponse(answer="", route="reject", source="none", citations=[]))
+
+
+def _submitted_response(payload: dict[str, Any]) -> QueryResponse:
+    return QueryResponse(
+        answer=str(payload.get("answer") or ""),
+        route=payload["route"],
+        source=payload["source"],
+        citations=payload.get("citations") or [],
+    )
 
 
 def _capture_debug(debug_turns: list[LlmDebugExchange], result: ChatResult) -> None:

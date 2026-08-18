@@ -1,7 +1,7 @@
 """Deterministic tool-calling double for SPECS e2e tests.
 
-Plans the same tools a well-behaved model should, then synthesizes the next
-turn from real tool JSON so the agent loop and grounding stay under test.
+Plans the same tools a well-behaved model should, then submits respond
+from real tool JSON so the agent loop stays under test.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def scripted_chat(
     del tools
     query, nct_id = _user_payload(messages)
     if any(message.get("role") == "tool" for message in messages):
-        return ChatResult(content=_synthesize(messages))
+        return ChatResult(tool_calls=[_call("respond", _respond_args(messages))])
     return ChatResult(tool_calls=_plan(query, nct_id))
 
 
@@ -112,8 +112,19 @@ def _plan(query: str, nct_id: str | None) -> list[ToolCall]:
     return [_call("reject", {"reason": "unclear"})]
 
 
-def _synthesize(messages: list[dict[str, Any]]) -> str:
+def _respond_args(messages: list[dict[str, Any]]) -> dict[str, Any]:
     query, _nct_id = _user_payload(messages)
+    payloads = _tool_payloads(messages)
+    answer, route, source, citations = _synthesize_envelope(query, payloads)
+    return {
+        "answer": answer,
+        "route": route,
+        "source": source,
+        "citations": citations,
+    }
+
+
+def _tool_payloads(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     payloads: list[dict[str, Any]] = []
     for message in messages:
         if message.get("role") != "tool":
@@ -124,48 +135,108 @@ def _synthesize(messages: list[dict[str, Any]]) -> str:
             continue
         if isinstance(payload, dict):
             payloads.append(payload)
+    return payloads
 
+
+def _synthesize_envelope(
+    query: str, payloads: list[dict[str, Any]]
+) -> tuple[str, str, str, list[dict[str, str]]]:
     for payload in payloads:
         if payload.get("rejected"):
-            return _synthesize_reject(query, payload.get("reason"))
+            return _synthesize_reject(query, payload.get("reason")), "reject", "none", []
 
     ncts: set[str] = set()
     scoped = False
+    chunks: list[dict[str, Any]] = []
+    sites: list[dict[str, Any]] = []
     for payload in payloads:
         if payload.get("scoped_to_nct"):
             scoped = True
         for chunk in payload.get("chunks") or []:
-            if isinstance(chunk, dict) and chunk.get("nct_id"):
-                ncts.add(str(chunk["nct_id"]).upper())
-    if len(ncts) > 1 and not scoped:
-        return (
-            "I found eligibility text from more than one study. "
-            "Please provide an NCT ID for the protocol you want me to look up."
-        )
-
-    parts: list[str] = []
-    for payload in payloads:
+            if isinstance(chunk, dict):
+                chunks.append(chunk)
+                if chunk.get("nct_id"):
+                    ncts.add(str(chunk["nct_id"]).upper())
         if payload.get("found") is False and payload.get("site_id"):
-            return f"I don't have any information on site {payload['site_id']}."
+            return (
+                f"I don't have any information on site {payload['site_id']}.",
+                "site",
+                "none",
+                [],
+            )
         if payload.get("found") and payload.get("field") and payload.get("value") is None:
             field = str(payload["field"]).replace("_", " ")
-            return f"The {field} for {payload.get('site_id')} is not available."
-        if payload.get("chunks"):
-            for chunk in payload["chunks"]:
-                if isinstance(chunk, dict) and chunk.get("text"):
-                    parts.append(str(chunk["text"]))
+            site_id = str(payload.get("site_id") or "")
+            return (
+                f"The {field} for {site_id} is not available.",
+                "site",
+                "sites",
+                [{"source": "sites", "site_id": site_id}] if site_id else [],
+            )
         if payload.get("found") and payload.get("field") and payload.get("value") is not None:
-            parts.append(
-                f"{payload.get('site_id')} {payload.get('field')} {payload.get('value')}"
+            site_id = str(payload.get("site_id") or "")
+            return (
+                f"{site_id} {payload.get('field')} {payload.get('value')}",
+                "site",
+                "sites",
+                [{"source": "sites", "site_id": site_id}] if site_id else [],
             )
         site = payload.get("site")
         if payload.get("found") and isinstance(site, dict):
-            parts.append(str(site))
+            site_id = str(site.get("site_id") or "")
+            return (
+                str(site),
+                "site",
+                "sites",
+                [{"source": "sites", "site_id": site_id}] if site_id else [],
+            )
         if isinstance(payload.get("sites"), list):
-            parts.append(str(payload["sites"]))
-    if not parts:
-        return "I don't have that information."
-    return "Grounded from tools: " + " ".join(parts)
+            sites.extend(row for row in payload["sites"] if isinstance(row, dict))
+
+    if len(ncts) > 1 and not scoped:
+        return (
+            "I found eligibility text from more than one study. "
+            "Please provide an NCT ID for the protocol you want me to look up.",
+            "protocol",
+            "none",
+            [],
+        )
+
+    citations: list[dict[str, str]] = []
+    for chunk in chunks:
+        nct_id = chunk.get("nct_id")
+        section = chunk.get("section")
+        if nct_id and section:
+            citations.append(
+                {"source": "protocol", "nct_id": str(nct_id), "section": str(section)}
+            )
+    for row in sites:
+        site_id = row.get("site_id")
+        if site_id:
+            citations.append({"source": "sites", "site_id": str(site_id)})
+
+    parts: list[str] = []
+    for chunk in chunks:
+        if chunk.get("text"):
+            parts.append(str(chunk["text"]))
+    if sites:
+        parts.append(str(sites))
+
+    used_protocol = bool(chunks) or any("chunks" in payload for payload in payloads)
+    used_sites = bool(sites)
+    if used_protocol and not chunks and not used_sites:
+        return "I don't have that information.", "protocol", "none", []
+    if used_protocol and used_sites:
+        route = "hybrid"
+        source = "hybrid" if chunks and sites else "sites" if sites else "protocol"
+    elif used_protocol:
+        route, source = "protocol", "protocol"
+    elif used_sites:
+        route, source = "site", "sites"
+    else:
+        return "I don't have that information.", "reject", "none", []
+
+    return "Grounded from tools: " + " ".join(parts), route, source, citations
 
 
 def _synthesize_reject(query: str, reason: object) -> str:

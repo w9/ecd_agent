@@ -1,4 +1,4 @@
-"""Unit tests for tool dispatch, grounding, and the agent loop."""
+"""Unit tests for tool dispatch and the agent loop."""
 
 from __future__ import annotations
 
@@ -7,9 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from app.agent.assemble import assemble
 from app.agent.loop import run_agent
-from app.agent.tools import EvidenceLedger, ToolContext, execute_tool
+from app.agent.tools import ToolContext, execute_tool
 from app.llm import ChatResult, LLMError, ToolCall
 from app.rag.chunk import Chunk
 from app.rag.store import save_chunks
@@ -113,62 +112,21 @@ def test_unknown_tool_and_bad_args_are_errors(ctx: ToolContext) -> None:
     )
 
 
-def test_assemble_pins_site_number_and_drops_invented_ids() -> None:
-    ledger = EvidenceLedger()
-    ledger.used_site_tool = True
-    ledger.metric_results.append(
+def test_respond_returns_the_model_envelope(ctx: ToolContext) -> None:
+    payload = execute_tool(
+        "respond",
         {
-            "found": True,
-            "site_id": "SITE-001",
-            "field": "monthly_enrollment_rate",
-            "value": 8.3,
-            "lookup": False,
-        }
-    )
-    response = assemble(
-        "What is the enrollment rate for SITE-001?",
-        ledger,
-        "SITE-001 currently enrolls 99.9 patients a month. Also SITE-999.",
-    )
-    assert response.route == "site"
-    assert "currently enrolls" in response.answer
-    assert "8.3" in response.answer
-    assert "99.9" not in response.answer
-    assert "SITE-999" not in response.answer
-
-
-def test_assemble_keeps_lowest_enrollment_model_answer() -> None:
-    ledger = EvidenceLedger()
-    ledger.used_site_tool = True
-    ledger.site_rows = [
-        {
-            "site_id": "SITE-001",
-            "therapeutic_area": "Oncology",
-            "monthly_enrollment_rate": 8.3,
+            "answer": "SITE-011 has the lowest enrollment rate at 0.0.",
+            "route": "site",
+            "source": "sites",
+            "citations": [{"source": "sites", "site_id": "SITE-011"}],
         },
-        {
-            "site_id": "SITE-011",
-            "therapeutic_area": "Oncology",
-            "monthly_enrollment_rate": 0.0,
-        },
-    ]
-    response = assemble(
-        "Which site has the lowest enrollment rate?",
-        ledger,
-        "SITE-011 — Inactive Desert Site has the lowest enrollment rate at 0.0.",
+        ctx,
     )
-    assert response.route == "site"
-    assert "SITE-011" in response.answer
-    assert "lowest" in response.answer
-    assert "highest" not in response.answer
-    assert "SITE-001 has the highest" not in response.answer
-    assert any(citation.site_id == "SITE-011" for citation in response.citations)
-
-
-def test_assemble_no_tools_is_reject() -> None:
-    response = assemble("hello", EvidenceLedger(), "The rate is 8.3")
-    assert response.route == "reject"
-    assert "8.3" not in response.answer
+    assert payload["submitted"] is True
+    assert payload["answer"] == "SITE-011 has the lowest enrollment rate at 0.0."
+    assert payload["route"] == "site"
+    assert payload["citations"][0]["site_id"] == "SITE-011"
 
 
 def test_search_protocol_reports_unscoped_and_not_site_bound(ctx: ToolContext) -> None:
@@ -194,61 +152,6 @@ def test_search_protocol_reports_scoped_when_nct_passed(ctx: ToolContext) -> Non
     assert result["chunks"]
 
 
-def test_assemble_unscoped_multi_nct_asks_for_nct() -> None:
-    ledger = EvidenceLedger()
-    ledger.used_protocol_tool = True
-    ledger.protocol_scoped_to_nct = False
-    ledger.protocol_chunks = [
-        {
-            "nct_id": "NCT04470427",
-            "section": "eligibility.inclusion",
-            "text": "Healthy adults or adults with stable conditions.",
-        },
-        {
-            "nct_id": "NCT04368728",
-            "section": "eligibility.inclusion",
-            "text": "Healthy participants at risk of COVID-19.",
-        },
-    ]
-    response = assemble(
-        "Enrollment criteria at SITE-001",
-        ledger,
-        "The available enrollment criteria associated with protocols found "
-        "for SITE-001 include NCT04470427. The rate is 8.3.",
-    )
-    assert response.route == "protocol"
-    assert response.source == "none"
-    assert response.citations == []
-    lowered = response.answer.lower()
-    assert "nct" in lowered
-    assert "8.3" not in response.answer
-    assert "SITE-001" not in response.answer
-    assert "associated with" not in lowered
-    assert "found for" not in lowered
-
-
-def test_assemble_protocol_strips_unbound_site_ids() -> None:
-    ledger = EvidenceLedger()
-    ledger.used_protocol_tool = True
-    ledger.protocol_chunks = [
-        {
-            "nct_id": "NCT04516746",
-            "section": "eligibility.inclusion",
-            "text": "Age 18 years or older.",
-        }
-    ]
-    response = assemble(
-        "Enrollment criteria at SITE-001",
-        ledger,
-        "Inclusion criteria associated with protocols found for SITE-001: Age 18.",
-    )
-    assert response.route == "protocol"
-    assert response.source == "protocol"
-    assert "18" in response.answer
-    assert "SITE-001" not in response.answer
-    assert "8.3" not in response.answer
-
-
 def test_run_agent_uses_tool_results(ctx: ToolContext, monkeypatch: pytest.MonkeyPatch) -> None:
     turns = [
         ChatResult(
@@ -263,7 +166,20 @@ def test_run_agent_uses_tool_results(ctx: ToolContext, monkeypatch: pytest.Monke
                 )
             ]
         ),
-        ChatResult(content="The monthly enrollment rate for SITE-001 is 99.9."),
+        ChatResult(
+            tool_calls=[
+                ToolCall(
+                    id="c2",
+                    name="respond",
+                    arguments={
+                        "answer": "The monthly enrollment rate for SITE-001 is 8.3.",
+                        "route": "site",
+                        "source": "sites",
+                        "citations": [{"source": "sites", "site_id": "SITE-001"}],
+                    },
+                )
+            ]
+        ),
     ]
 
     def fake_chat(*args: object, **kwargs: object) -> ChatResult:
@@ -283,6 +199,54 @@ def test_run_agent_uses_tool_results(ctx: ToolContext, monkeypatch: pytest.Monke
     assert response.llm_debug is None
 
 
+def test_run_agent_does_not_rewrite_respond_payload(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    turns = [
+        ChatResult(
+            tool_calls=[
+                ToolCall(
+                    id="c1",
+                    name="get_site_metric",
+                    arguments={
+                        "site_id": "SITE-001",
+                        "field": "monthly_enrollment_rate",
+                    },
+                )
+            ]
+        ),
+        ChatResult(
+            tool_calls=[
+                ToolCall(
+                    id="c2",
+                    name="respond",
+                    arguments={
+                        "answer": "SITE-011 has the lowest enrollment rate at 0.0.",
+                        "route": "site",
+                        "source": "sites",
+                        "citations": [{"source": "sites", "site_id": "SITE-011"}],
+                    },
+                )
+            ]
+        ),
+    ]
+
+    def fake_chat(*args: object, **kwargs: object) -> ChatResult:
+        return turns.pop(0)
+
+    monkeypatch.setattr("app.llm.chat", fake_chat)
+    response = run_agent(
+        "Which site has the lowest enrollment rate?",
+        None,
+        sites_db_path=ctx.sites_db_path,
+        protocols_db_path=ctx.protocols_db_path,
+    )
+    assert response.answer == "SITE-011 has the lowest enrollment rate at 0.0."
+    assert response.route == "site"
+    assert response.source == "sites"
+    assert response.citations[0].site_id == "SITE-011"
+
+
 def test_run_agent_includes_llm_debug(ctx: ToolContext, monkeypatch: pytest.MonkeyPatch) -> None:
     turns = [
         ChatResult(
@@ -300,7 +264,18 @@ def test_run_agent_includes_llm_debug(ctx: ToolContext, monkeypatch: pytest.Monk
             debug_response={"id": "resp-1"},
         ),
         ChatResult(
-            content="The monthly enrollment rate for SITE-001 is 8.3.",
+            tool_calls=[
+                ToolCall(
+                    id="c2",
+                    name="respond",
+                    arguments={
+                        "answer": "The monthly enrollment rate for SITE-001 is 8.3.",
+                        "route": "site",
+                        "source": "sites",
+                        "citations": [{"source": "sites", "site_id": "SITE-001"}],
+                    },
+                )
+            ],
             debug_request={"model": "debug", "messages": ["turn-2"]},
             debug_response={"id": "resp-2"},
         ),
@@ -331,7 +306,18 @@ def test_run_agent_debug_cards_snapshot_each_turn(
         live_request = {"messages": messages}
         if any(item.get("role") == "tool" for item in messages):
             return ChatResult(
-                content="The monthly enrollment rate for SITE-001 is 8.3.",
+                tool_calls=[
+                    ToolCall(
+                        id="c2",
+                        name="respond",
+                        arguments={
+                            "answer": "The monthly enrollment rate for SITE-001 is 8.3.",
+                            "route": "site",
+                            "source": "sites",
+                            "citations": [{"source": "sites", "site_id": "SITE-001"}],
+                        },
+                    )
+                ],
                 debug_request=live_request,
                 debug_response={"id": "resp-2"},
             )

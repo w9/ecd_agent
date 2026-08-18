@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
+from app.schemas import QueryResponse
 from app.tools.protocols import search_protocol
 from app.tools.sites import SITE_FIELDS, list_sites, lookup_site, rank_sites
 
@@ -126,10 +129,53 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "respond",
+            "description": (
+                "Submit the final API payload. Call this after tools, or "
+                "immediately to refuse. You set answer, route, source, and "
+                "citations. Copy site numbers from tools. Do not invent "
+                "site IDs. Do not bind protocol chunks to a site_id."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "answer": {"type": "string"},
+                    "route": {
+                        "type": "string",
+                        "enum": ["site", "protocol", "hybrid", "reject"],
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": ["sites", "protocol", "hybrid", "none"],
+                    },
+                    "citations": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "source": {
+                                    "type": "string",
+                                    "enum": ["sites", "protocol"],
+                                },
+                                "site_id": {"type": "string"},
+                                "nct_id": {"type": "string"},
+                                "section": {"type": "string"},
+                            },
+                            "required": ["source"],
+                        },
+                    },
+                },
+                "required": ["answer", "route", "source"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "reject",
             "description": (
-                "Stop and refuse the question. Use for unsafe, incomplete, "
-                "or out-of-scope requests."
+                "Mark the question as unsafe, incomplete, or out of scope. "
+                "You must still call respond with route=reject."
             ),
             "parameters": {
                 "type": "object",
@@ -161,9 +207,13 @@ class EvidenceLedger:
     reject_reason: str | None = None
     used_site_tool: bool = False
     used_protocol_tool: bool = False
+    submitted: dict[str, Any] | None = None
 
     def record(self, name: str, payload: dict[str, Any]) -> None:
         if payload.get("error"):
+            return
+        if name == "respond":
+            self.submitted = payload
             return
         if name == "reject":
             reason = payload.get("reason")
@@ -221,6 +271,7 @@ def execute_tool(name: str, arguments: dict[str, Any], ctx: ToolContext) -> dict
         "rank_sites": _rank_sites,
         "list_sites": _list_sites,
         "search_protocol": _search_protocol,
+        "respond": _respond,
         "reject": _reject,
     }
     handler = handlers.get(name)
@@ -294,6 +345,27 @@ def _search_protocol(arguments: dict[str, Any], ctx: ToolContext) -> dict[str, A
             "If scoped_to_nct is false and chunks span multiple studies, "
             "ask for an NCT ID instead of merging them."
         ),
+    }
+
+
+def _respond(arguments: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    del ctx
+    answer = arguments.get("answer")
+    if not isinstance(answer, str):
+        raise ValueError("answer must be a string")
+    route = _require_str(arguments, "route")
+    source = _require_str(arguments, "source")
+    citations = arguments.get("citations") or []
+    try:
+        response = QueryResponse(answer=answer, route=route, source=source, citations=citations)
+    except ValidationError as exc:
+        raise ValueError(str(exc)) from exc
+    return {
+        "submitted": True,
+        "answer": response.answer,
+        "route": response.route,
+        "source": response.source,
+        "citations": [citation.model_dump() for citation in response.citations],
     }
 
 
