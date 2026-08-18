@@ -80,6 +80,26 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null
 }
 
+function asFiniteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function tokenUsageSuffix(response: Record<string, unknown>): string {
+  const usage = asRecord(response.usage)
+  if (!usage) return ""
+
+  const details =
+    asRecord(usage.prompt_tokens_details) ?? asRecord(usage.input_tokens_details)
+  const cached =
+    asFiniteNumber(usage.cached_tokens) ?? asFiniteNumber(details?.cached_tokens)
+  const total = asFiniteNumber(usage.total_tokens)
+
+  const parts: string[] = []
+  if (cached !== null) parts.push(`cached ${cached}`)
+  if (total !== null) parts.push(`total ${total}`)
+  return parts.length ? ` (${parts.join(", ")})` : ""
+}
+
 function parseToolArguments(raw: unknown): unknown {
   if (raw == null || raw === "") return {}
   if (typeof raw === "object") return raw
@@ -237,7 +257,10 @@ function DebugList({ exchanges }: { exchanges: LlmDebugExchange[] }) {
         return (
           <div key={index} className="flex flex-col gap-2">
             <DebugMarker title={`LLM request${suffix}`} payload={exchange.request} />
-            <DebugMarker title={`LLM response${suffix}`} payload={exchange.response} />
+            <DebugMarker
+              title={`LLM response${suffix}${tokenUsageSuffix(exchange.response)}`}
+              payload={exchange.response}
+            />
             {toolCalls.map((call) => (
               <DebugMarker
                 key={call.id}
