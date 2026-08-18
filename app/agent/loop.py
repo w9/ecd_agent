@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import app.llm as llm
-from app.agent.assemble import assemble, should_short_circuit
+from app.agent.assemble import assemble
 from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.tools import TOOL_SCHEMAS, EvidenceLedger, ToolContext, execute_tool
 from app.llm import ChatResult, LLMError
@@ -52,8 +52,6 @@ def run_agent(
                         "content": json.dumps(payload, default=str),
                     }
                 )
-            if should_short_circuit(ledger):
-                return finish(assemble(query, ledger, None))
             continue
         return finish(assemble(query, ledger, result.content))
 

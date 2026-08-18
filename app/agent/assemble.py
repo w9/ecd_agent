@@ -1,9 +1,8 @@
-"""Turn the evidence ledger (and optional model text) into a QueryResponse."""
+"""Ground the model's answer; do not write canned prose."""
 
 from __future__ import annotations
 
 import re
-from typing import Any
 
 from app.agent.tools import EvidenceLedger
 from app.grounding import format_number, grounded_citations
@@ -14,81 +13,54 @@ _SITE_BINDING_PHRASE = re.compile(
     r"\s+(?:associated with|found for|at|for)\s+SITE-\d+\b",
     re.I,
 )
+_LOOSE_SITE_BINDING = re.compile(r"\b(?:associated with|found for)\b", re.I)
+_NUMBER_CORE = re.compile(r"^-?\d+(?:\.\d+)?$")
+_EMBEDDED_NUMBER = re.compile(r"(?<![A-Za-z])\d+(?:\.\d+)?(?![A-Za-z])")
+_TOKEN_PUNCT = ".,;:()[]"
 
 
 def assemble(query: str, ledger: EvidenceLedger, model_answer: str | None) -> QueryResponse:
-    if not ledger.used_site_tool and not ledger.used_protocol_tool:
+    del query
+    route = _infer_route(ledger)
+    answer = (model_answer or "").strip()
+
+    if route == "reject":
         return QueryResponse(
-            answer=_reject_answer(query, ledger.reject_reason or "unclear"),
+            answer=_drop_ungrounded_tokens(answer, allowed_ids=set(), allowed_numbers=set()),
             route="reject",
             source="none",
             citations=[],
         )
 
-    route = _infer_route(ledger)
-    if route == "protocol" and not ledger.protocol_chunks and not ledger.site_rows:
-        return QueryResponse(
-            answer="I don't have any information in the ingested protocols for that question.",
-            route="protocol",
-            source="none",
-            citations=[],
-        )
     if route == "protocol" and _unscoped_multi_study(ledger):
+        answer = _unbind_sites_from_protocol_answer(answer)
+        answer = _drop_ungrounded_tokens(answer, allowed_ids=set(), allowed_numbers=set())
         return QueryResponse(
-            answer=(
-                "I found eligibility text from more than one study, and none of "
-                "it is tied to a site. Please provide an NCT ID for the protocol "
-                "you want me to look up."
-            ),
+            answer=answer,
             route="protocol",
             source="none",
             citations=[],
         )
-    if route == "hybrid" and not ledger.protocol_chunks and not ledger.site_rows:
-        return QueryResponse(
-            answer="I don't have enough protocol and site evidence to make a recommendation.",
-            route="hybrid",
-            source="none",
-            citations=[],
-        )
-    if route == "site":
-        site_response = _site_response(ledger, model_answer)
-        if site_response is not None:
-            return site_response
 
-    citations = _citations(ledger)
-    source = _infer_source(ledger, route)
-    answer = (model_answer or "").strip() or _fallback_answer(ledger, route)
-    answer = _pin_site_numbers(answer, ledger)
     if route == "protocol":
         answer = _unbind_sites_from_protocol_answer(answer)
+        answer = _drop_ungrounded_tokens(
+            answer,
+            allowed_ids=set(),
+            allowed_numbers=_chunk_numbers(ledger),
+        )
+    elif route == "hybrid":
+        answer = _drop_ungrounded_tokens(
+            answer,
+            allowed_ids=set(_allowed_site_ids(ledger)),
+            allowed_numbers=_site_numbers(ledger) | _chunk_numbers(ledger),
+        )
+    else:
+        answer = _pin_site_evidence(answer, ledger)
+
+    citations = _citations(ledger, answer)
+    source = _infer_source(ledger, route)
     return QueryResponse(answer=answer, route=route, source=source, citations=citations)
-
-
-def should_short_circuit(ledger: EvidenceLedger) -> bool:
-    """True when more model turns cannot change a deterministic outcome."""
-    if _is_reject(ledger):
-        return True
-    if ledger.used_protocol_tool and not ledger.used_site_tool:
-        if not ledger.protocol_chunks or _unscoped_multi_study(ledger):
-            return True
-    if not ledger.used_site_tool:
-        return False
-    if ledger.used_protocol_tool:
-        return not ledger.protocol_chunks and not ledger.site_rows
-    if _unknown_site(ledger):
-        return True
-    if _null_metric(ledger):
-        return True
-    if ledger.used_site_tool and not ledger.site_rows and not ledger.metric_results:
-        return True
-    return False
-
-
-def _is_reject(ledger: EvidenceLedger) -> bool:
-    if not ledger.reject_reason:
-        return False
-    return not ledger.used_site_tool and not ledger.used_protocol_tool
 
 
 def _infer_route(ledger: EvidenceLedger) -> Route:
@@ -121,127 +93,6 @@ def _infer_source(ledger: EvidenceLedger, route: Route) -> Source:
     return "none"
 
 
-def _site_response(ledger: EvidenceLedger, model_answer: str | None) -> QueryResponse | None:
-    if _unknown_site(ledger):
-        site_id = _first_requested_site(ledger) or "that site"
-        return QueryResponse(
-            answer=f"I don't have any information on site {site_id}.",
-            route="site",
-            source="none",
-            citations=[],
-        )
-    null_item = _null_metric(ledger)
-    if null_item is not None:
-        site_id = str(null_item.get("site_id") or "that site")
-        field = str(null_item.get("field") or "metric")
-        label = field.replace("_", " ")
-        citations = [Citation(source="sites", site_id=site_id)]
-        return QueryResponse(
-            answer=f"The {label} for {site_id} is not available.",
-            route="site",
-            source="sites",
-            citations=citations,
-        )
-    metric = _successful_metric(ledger)
-    if metric is not None:
-        site_id = str(metric["site_id"])
-        field = str(metric["field"])
-        value = metric["value"]
-        return QueryResponse(
-            answer=_format_metric_answer(site_id, field, value),
-            route="site",
-            source="sites",
-            citations=[Citation(source="sites", site_id=site_id)],
-        )
-    if len(ledger.site_rows) == 1 and not _looks_like_ranking(ledger):
-        row = ledger.site_rows[0]
-        site_id = str(row.get("site_id") or "unknown")
-        templated = _format_site_row(row)
-        answer = (model_answer or "").strip()
-        if site_id not in answer:
-            answer = templated
-        answer = _pin_site_numbers(answer, ledger)
-        expected_numbers = [
-            format_number(row[key])
-            for key in ("monthly_enrollment_rate", "active_trials", "remaining_slots")
-            if row.get(key) is not None
-        ]
-        if expected_numbers and not any(number in answer for number in expected_numbers):
-            answer = templated
-        return QueryResponse(
-            answer=answer,
-            route="site",
-            source="sites",
-            citations=[Citation(source="sites", site_id=site_id)],
-        )
-    if ledger.site_rows:
-        top = ledger.site_rows[0]
-        site_id = str(top.get("site_id") or "")
-        rate = top.get("monthly_enrollment_rate")
-        answer = (model_answer or "").strip()
-        if site_id and site_id not in answer:
-            area = top.get("therapeutic_area")
-            area_text = f" among {str(area).lower()} sites" if area else ""
-            rate_text = format_number(rate) if rate is not None else "an unknown rate"
-            answer = f"{site_id} has the highest enrollment rate{area_text} at {rate_text}."
-        else:
-            answer = _pin_site_numbers(answer, ledger)
-        citations = [
-            Citation(source="sites", site_id=str(row["site_id"]))
-            for row in ledger.site_rows
-            if row.get("site_id")
-        ]
-        return QueryResponse(
-            answer=answer or "I don't have any information to rank sites for that query.",
-            route="site",
-            source="sites",
-            citations=citations[:1],
-        )
-    if ledger.used_site_tool:
-        return QueryResponse(
-            answer="I don't have any information to rank sites for that query.",
-            route="site",
-            source="none",
-            citations=[],
-        )
-    return None
-
-
-def _unknown_site(ledger: EvidenceLedger) -> bool:
-    if ledger.site_rows:
-        return False
-    lookups = [item for item in ledger.metric_results if item.get("lookup") or item.get("field")]
-    return bool(lookups) and all(not item.get("found") for item in lookups)
-
-
-def _null_metric(ledger: EvidenceLedger) -> dict[str, Any] | None:
-    for item in ledger.metric_results:
-        if item.get("found") and item.get("field") and item.get("value") is None:
-            return item
-    return None
-
-
-def _successful_metric(ledger: EvidenceLedger) -> dict[str, Any] | None:
-    hits = [
-        item
-        for item in ledger.metric_results
-        if item.get("found") and item.get("field") and item.get("value") is not None
-    ]
-    return hits[0] if len(hits) == 1 else None
-
-
-def _first_requested_site(ledger: EvidenceLedger) -> str | None:
-    for item in ledger.metric_results:
-        site_id = item.get("site_id")
-        if isinstance(site_id, str) and site_id:
-            return site_id
-    return None
-
-
-def _looks_like_ranking(ledger: EvidenceLedger) -> bool:
-    return len(ledger.site_rows) > 1
-
-
 def _unscoped_multi_study(ledger: EvidenceLedger) -> bool:
     if ledger.protocol_scoped_to_nct:
         return False
@@ -257,10 +108,11 @@ def _unbind_sites_from_protocol_answer(answer: str) -> str:
     """Drop site IDs from protocol-only answers; chunks are not site-bound."""
     cleaned = _SITE_BINDING_PHRASE.sub("", answer)
     cleaned = _SITE_ID_TOKEN.sub("", cleaned)
+    cleaned = _LOOSE_SITE_BINDING.sub("", cleaned)
     return re.sub(r" {2,}", " ", cleaned).strip()
 
 
-def _citations(ledger: EvidenceLedger) -> list[Citation]:
+def _citations(ledger: EvidenceLedger, answer: str) -> list[Citation]:
     citations: list[Citation] = []
     seen_protocol: set[tuple[str, str]] = set()
     for chunk in ledger.protocol_chunks:
@@ -276,97 +128,114 @@ def _citations(ledger: EvidenceLedger) -> list[Citation]:
             Citation(source="protocol", nct_id=str(nct_id), section=str(section))
         )
     citations = grounded_citations(citations, ledger.protocol_chunks)
+
+    allowed_sites = _allowed_site_ids(ledger)
+    mentioned = [
+        allowed_sites[match.group(0).upper()]
+        for match in _SITE_ID_TOKEN.finditer(answer)
+        if match.group(0).upper() in allowed_sites
+    ]
+    site_ids = mentioned or list(allowed_sites.values())
     seen_sites: set[str] = set()
-    for row in ledger.site_rows:
-        site_id = row.get("site_id")
-        if not isinstance(site_id, str) or site_id in seen_sites:
+    for site_id in site_ids:
+        if site_id in seen_sites:
             continue
         seen_sites.add(site_id)
         citations.append(Citation(source="sites", site_id=site_id))
-    for item in ledger.metric_results:
-        site_id = item.get("site_id")
-        if item.get("found") and isinstance(site_id, str) and site_id not in seen_sites:
-            seen_sites.add(site_id)
-            citations.append(Citation(source="sites", site_id=site_id))
     return citations
 
 
-def _fallback_answer(ledger: EvidenceLedger, route: Route) -> str:
-    if route == "hybrid":
-        return "Based on the retrieved protocol excerpts and site rows, see the cited sources."
-    if route == "protocol" and ledger.protocol_chunks:
-        return ledger.protocol_chunks[0].get("text") or "See the retrieved protocol excerpts."
-    return "I don't have any information for that question."
-
-
-def _pin_site_numbers(answer: str, ledger: EvidenceLedger) -> str:
-    """Drop invented site IDs; keep tool numbers as the source of truth."""
-    allowed_ids = {
-        str(row["site_id"])
-        for row in ledger.site_rows
-        if row.get("site_id")
-    }
+def _allowed_site_ids(ledger: EvidenceLedger) -> dict[str, str]:
+    allowed: dict[str, str] = {}
+    for row in ledger.site_rows:
+        site_id = row.get("site_id")
+        if isinstance(site_id, str) and site_id:
+            allowed[site_id.upper()] = site_id
     for item in ledger.metric_results:
-        if item.get("found") and item.get("site_id"):
-            allowed_ids.add(str(item["site_id"]))
-    if not allowed_ids:
-        return answer
-    tokens = answer.split()
+        site_id = item.get("site_id")
+        if item.get("found") and isinstance(site_id, str) and site_id:
+            allowed[site_id.upper()] = site_id
+    return allowed
+
+
+def _pin_site_evidence(answer: str, ledger: EvidenceLedger) -> str:
+    """Drop invented site IDs; keep tool numbers as the source of truth."""
+    allowed_ids = set(_allowed_site_ids(ledger))
+    allowed_numbers = _site_numbers(ledger)
+    replacement = None
+    if len(allowed_numbers) == 1:
+        value = next(iter(allowed_numbers))
+        replacement = format_number(value)
+    return _drop_ungrounded_tokens(
+        answer,
+        allowed_ids=allowed_ids,
+        allowed_numbers=allowed_numbers,
+        replacement=replacement,
+    )
+
+
+def _drop_ungrounded_tokens(
+    answer: str,
+    *,
+    allowed_ids: set[str],
+    allowed_numbers: set[float],
+    replacement: str | None = None,
+) -> str:
     kept: list[str] = []
-    for token in tokens:
-        stripped = token.strip(".,;:()[]")
-        if stripped.upper().startswith("SITE-") and stripped.upper() not in {
-            site_id.upper() for site_id in allowed_ids
-        }:
+    for token in answer.split():
+        prefix, core, suffix = _split_punct(token)
+        if core.upper().startswith("SITE-"):
+            if core.upper() not in {site_id.upper() for site_id in allowed_ids}:
+                continue
+            kept.append(token)
+            continue
+        if _NUMBER_CORE.match(core):
+            value = float(core)
+            if any(value == allowed for allowed in allowed_numbers):
+                kept.append(token)
+                continue
+            if replacement is not None:
+                kept.append(f"{prefix}{replacement}{suffix}")
             continue
         kept.append(token)
     return " ".join(kept)
 
 
-def _format_metric_answer(site_id: str, field: str, value: float | int) -> str:
-    number = format_number(value)
-    if field == "monthly_enrollment_rate":
-        return f"The monthly enrollment rate for {site_id} is {number}."
-    if field == "active_trials":
-        return f"There are {number} active trials at {site_id}."
-    if field == "remaining_slots":
-        return f"{site_id} has {number} remaining slots."
-    return f"The {field.replace('_', ' ')} for {site_id} is {number}."
+def _split_punct(token: str) -> tuple[str, str, str]:
+    start = 0
+    end = len(token)
+    while start < end and token[start] in _TOKEN_PUNCT:
+        start += 1
+    while end > start and token[end - 1] in _TOKEN_PUNCT:
+        end -= 1
+    return token[:start], token[start:end], token[end:]
 
 
-def _format_site_row(row: dict[str, Any]) -> str:
-    site_id = row.get("site_id", "unknown")
-    parts = [f"{site_id} ({row.get('site_name') or 'unnamed site'})"]
-    if row.get("therapeutic_area"):
-        parts.append(f"therapeutic area {row['therapeutic_area']}")
-    rate = row.get("monthly_enrollment_rate")
-    if rate is not None:
-        parts.append(f"monthly enrollment rate {format_number(rate)}")
-    trials = row.get("active_trials")
-    if trials is not None:
-        parts.append(f"{format_number(trials)} active trials")
-    slots = row.get("remaining_slots")
-    if slots is not None:
-        parts.append(f"{format_number(slots)} remaining slots")
-    return "; ".join(parts) + "."
+def _site_numbers(ledger: EvidenceLedger) -> set[float]:
+    values: set[float] = set()
+    for row in ledger.site_rows:
+        for key in ("monthly_enrollment_rate", "active_trials", "remaining_slots"):
+            value = row.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                values.add(float(value))
+    for item in ledger.metric_results:
+        value = item.get("value")
+        if (
+            item.get("found")
+            and item.get("field")
+            and isinstance(value, (int, float))
+            and not isinstance(value, bool)
+        ):
+            values.add(float(value))
+    return values
 
 
-def _reject_answer(query: str, reason: str) -> str:
-    if reason == "need_site":
-        return "Please provide a site_id so I can look up that enrollment metric."
-    if reason == "need_nct":
-        return "Please provide an NCT ID for the study you want me to look up."
-    if reason == "unsafe":
-        lowered = query.lower()
-        if "patient" in lowered or "chart" in lowered or "john doe" in lowered:
-            return (
-                "I can't process patient charts or give medical advice. "
-                "Ask about a site_id or an NCT ID without personal health information."
-            )
-        if "protocol" in lowered:
-            return (
-                "I can't write a new clinical protocol from scratch. "
-                "I can only answer questions about ingested public protocols and mock site data."
-            )
-        return "I can't help with that request."
-    return "I need a more specific question about a site_id or an NCT ID / study."
+def _chunk_numbers(ledger: EvidenceLedger) -> set[float]:
+    values: set[float] = set()
+    for chunk in ledger.protocol_chunks:
+        text = chunk.get("text")
+        if not isinstance(text, str):
+            continue
+        for match in _EMBEDDED_NUMBER.finditer(text):
+            values.add(float(match.group(0)))
+    return values

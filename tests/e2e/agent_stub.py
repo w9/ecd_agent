@@ -113,7 +113,8 @@ def _plan(query: str, nct_id: str | None) -> list[ToolCall]:
 
 
 def _synthesize(messages: list[dict[str, Any]]) -> str:
-    parts: list[str] = []
+    query, _nct_id = _user_payload(messages)
+    payloads: list[dict[str, Any]] = []
     for message in messages:
         if message.get("role") != "tool":
             continue
@@ -121,13 +122,39 @@ def _synthesize(messages: list[dict[str, Any]]) -> str:
             payload = json.loads(message.get("content") or "{}")
         except json.JSONDecodeError:
             continue
-        if not isinstance(payload, dict):
-            continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+
+    for payload in payloads:
+        if payload.get("rejected"):
+            return _synthesize_reject(query, payload.get("reason"))
+
+    ncts: set[str] = set()
+    scoped = False
+    for payload in payloads:
+        if payload.get("scoped_to_nct"):
+            scoped = True
+        for chunk in payload.get("chunks") or []:
+            if isinstance(chunk, dict) and chunk.get("nct_id"):
+                ncts.add(str(chunk["nct_id"]).upper())
+    if len(ncts) > 1 and not scoped:
+        return (
+            "I found eligibility text from more than one study. "
+            "Please provide an NCT ID for the protocol you want me to look up."
+        )
+
+    parts: list[str] = []
+    for payload in payloads:
+        if payload.get("found") is False and payload.get("site_id"):
+            return f"I don't have any information on site {payload['site_id']}."
+        if payload.get("found") and payload.get("field") and payload.get("value") is None:
+            field = str(payload["field"]).replace("_", " ")
+            return f"The {field} for {payload.get('site_id')} is not available."
         if payload.get("chunks"):
             for chunk in payload["chunks"]:
                 if isinstance(chunk, dict) and chunk.get("text"):
                     parts.append(str(chunk["text"]))
-        if payload.get("found") and payload.get("field"):
+        if payload.get("found") and payload.get("field") and payload.get("value") is not None:
             parts.append(
                 f"{payload.get('site_id')} {payload.get('field')} {payload.get('value')}"
             )
@@ -139,6 +166,27 @@ def _synthesize(messages: list[dict[str, Any]]) -> str:
     if not parts:
         return "I don't have that information."
     return "Grounded from tools: " + " ".join(parts)
+
+
+def _synthesize_reject(query: str, reason: object) -> str:
+    if reason == "need_site":
+        return "Please provide a site_id so I can look up that enrollment metric."
+    if reason == "need_nct":
+        return "Please provide an NCT ID for the study you want me to look up."
+    if reason == "unsafe":
+        lowered = query.lower()
+        if "patient" in lowered or "chart" in lowered or "john doe" in lowered:
+            return (
+                "I can't process patient charts or give medical advice. "
+                "Ask about a site_id or an NCT ID without personal health information."
+            )
+        if "protocol" in lowered:
+            return (
+                "I can't write a new clinical protocol from scratch. "
+                "I can only answer questions about ingested public protocols and mock site data."
+            )
+        return "I can't help with that request."
+    return "I need a more specific question about a site_id or an NCT ID / study."
 
 
 def _user_payload(messages: list[dict[str, Any]]) -> tuple[str, str | None]:

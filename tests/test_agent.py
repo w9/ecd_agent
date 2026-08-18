@@ -128,12 +128,41 @@ def test_assemble_pins_site_number_and_drops_invented_ids() -> None:
     response = assemble(
         "What is the enrollment rate for SITE-001?",
         ledger,
-        "The monthly enrollment rate for SITE-001 is 99.9. Also SITE-999.",
+        "SITE-001 currently enrolls 99.9 patients a month. Also SITE-999.",
     )
     assert response.route == "site"
+    assert "currently enrolls" in response.answer
     assert "8.3" in response.answer
     assert "99.9" not in response.answer
     assert "SITE-999" not in response.answer
+
+
+def test_assemble_keeps_lowest_enrollment_model_answer() -> None:
+    ledger = EvidenceLedger()
+    ledger.used_site_tool = True
+    ledger.site_rows = [
+        {
+            "site_id": "SITE-001",
+            "therapeutic_area": "Oncology",
+            "monthly_enrollment_rate": 8.3,
+        },
+        {
+            "site_id": "SITE-011",
+            "therapeutic_area": "Oncology",
+            "monthly_enrollment_rate": 0.0,
+        },
+    ]
+    response = assemble(
+        "Which site has the lowest enrollment rate?",
+        ledger,
+        "SITE-011 — Inactive Desert Site has the lowest enrollment rate at 0.0.",
+    )
+    assert response.route == "site"
+    assert "SITE-011" in response.answer
+    assert "lowest" in response.answer
+    assert "highest" not in response.answer
+    assert "SITE-001 has the highest" not in response.answer
+    assert any(citation.site_id == "SITE-011" for citation in response.citations)
 
 
 def test_assemble_no_tools_is_reject() -> None:
