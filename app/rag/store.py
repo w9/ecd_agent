@@ -126,6 +126,13 @@ FROM protocol_chunks
 ORDER BY id
 """
 
+_SELECT_BY_NCT_SQL = """
+SELECT id, nct_id, section, chunk_index, brief_title, text, start_char, end_char
+FROM protocol_chunks
+WHERE nct_id = ? COLLATE NOCASE
+ORDER BY id
+"""
+
 _SEARCH_SQL = f"""
 SELECT
     c.id, c.nct_id, c.section, c.chunk_index, c.brief_title,
@@ -134,6 +141,19 @@ SELECT
 FROM {FTS_TABLE}
 JOIN protocol_chunks AS c ON c.id = {FTS_TABLE}.rowid
 WHERE {FTS_TABLE} MATCH ?
+ORDER BY rank
+LIMIT ?
+"""
+
+_SEARCH_SCOPED_SQL = f"""
+SELECT
+    c.id, c.nct_id, c.section, c.chunk_index, c.brief_title,
+    c.text, c.start_char, c.end_char,
+    bm25({FTS_TABLE}) AS rank
+FROM {FTS_TABLE}
+JOIN protocol_chunks AS c ON c.id = {FTS_TABLE}.rowid
+WHERE {FTS_TABLE} MATCH ?
+  AND c.nct_id = ? COLLATE NOCASE
 ORDER BY rank
 LIMIT ?
 """
@@ -198,12 +218,18 @@ def search_chunks(
     query: str,
     *,
     limit: int = 8,
+    nct_id: str | None = None,
 ) -> list[tuple[Chunk, float]]:
     """Return BM25-ranked chunks for an FTS5 MATCH query."""
     stripped = query.strip()
     if not stripped or limit <= 0:
         return []
-    rows = conn.execute(_SEARCH_SQL, (stripped, limit)).fetchall()
+    if nct_id:
+        rows = conn.execute(
+            _SEARCH_SCOPED_SQL, (stripped, nct_id.strip(), limit)
+        ).fetchall()
+    else:
+        rows = conn.execute(_SEARCH_SQL, (stripped, limit)).fetchall()
     return [(_row_to_chunk(row), float(row["rank"])) for row in rows]
 
 
@@ -280,17 +306,29 @@ def load_chunks_from_path(db_path: Path | str) -> list[Chunk]:
         conn.close()
 
 
+def load_chunks_for_nct(db_path: Path | str, nct_id: str) -> list[Chunk]:
+    """Load content rows for one NCT ID."""
+    conn = connect(db_path)
+    try:
+        init_schema(conn)
+        rows = conn.execute(_SELECT_BY_NCT_SQL, (nct_id.strip(),)).fetchall()
+    finally:
+        conn.close()
+    return [_row_to_chunk(row) for row in rows]
+
+
 def search_chunks_from_path(
     db_path: Path | str,
     query: str,
     *,
     limit: int = 8,
+    nct_id: str | None = None,
 ) -> list[tuple[Chunk, float]]:
     """Open ``db_path`` and run an FTS5 search."""
     conn = connect(db_path)
     try:
         init_schema(conn)
-        return search_chunks(conn, query, limit=limit)
+        return search_chunks(conn, query, limit=limit, nct_id=nct_id)
     finally:
         conn.close()
 

@@ -4,7 +4,13 @@ from pathlib import Path
 
 from app.rag.chunk import Chunk
 from app.rag.store import ProtocolDocument, save_chunks, save_documents
-from app.tools.protocols import get_protocol_field, is_eligibility_query, search_protocol
+from app.tools.protocols import (
+    get_protocol_field,
+    get_study_summary,
+    is_eligibility_query,
+    is_outcome_query,
+    search_protocol,
+)
 
 
 def _chunk(**overrides: object) -> Chunk:
@@ -127,6 +133,136 @@ def test_get_protocol_field_reads_nested_json_and_all_studies(tmp_path) -> None:
         nct_id="NCT99999999",
     )
     assert missing["results"][0]["found"] is False
+
+
+def test_scoped_search_caps_chunks_and_drops_outcomes(tmp_path: Path) -> None:
+    db_path = tmp_path / "protocols.db"
+    chunks = [
+        _chunk(
+            nct_id="NCT04368728",
+            section="conditions",
+            text="Conditions: SARS-CoV-2 Infection, COVID-19",
+            end_char=42,
+        ),
+        _chunk(
+            nct_id="NCT04368728",
+            section="design",
+            text="Study type: INTERVENTIONAL. Phases: PHASE2, PHASE3.",
+            end_char=50,
+            chunk_index=1,
+        ),
+        _chunk(
+            nct_id="NCT04368728",
+            section="eligibility.structured",
+            text="Minimum age: 12 Years. Sex: ALL.",
+            end_char=32,
+            chunk_index=2,
+        ),
+    ]
+    chunks.extend(
+        _chunk(
+            nct_id="NCT04368728",
+            section="outcomes.primary",
+            text=f"Primary outcome {index}: local reactions after dose {index}.",
+            end_char=48,
+            chunk_index=index + 3,
+        )
+        for index in range(20)
+    )
+    save_chunks(db_path, chunks)
+
+    found = search_protocol(
+        "condition intervention study phase enrollment eligibility",
+        db_path=db_path,
+        nct_id="NCT04368728",
+    )
+    assert len(found) <= 8
+    assert {chunk["section"] for chunk in found} <= {
+        "conditions",
+        "design",
+        "eligibility.structured",
+    }
+    assert not any(chunk["section"].startswith("outcomes.") for chunk in found)
+
+
+def test_scoped_search_keeps_outcomes_when_asked(tmp_path: Path) -> None:
+    db_path = tmp_path / "protocols.db"
+    save_chunks(
+        db_path,
+        [
+            _chunk(
+                nct_id="NCT04368728",
+                section="conditions",
+                text="COVID-19",
+                end_char=8,
+            ),
+            _chunk(
+                nct_id="NCT04368728",
+                section="outcomes.primary",
+                text="Primary outcome: COVID-19 incidence after dose 2.",
+                end_char=49,
+                chunk_index=1,
+            ),
+        ],
+    )
+    found = search_protocol(
+        "What is the primary outcome?",
+        db_path=db_path,
+        nct_id="NCT04368728",
+    )
+    assert any(chunk["section"] == "outcomes.primary" for chunk in found)
+
+
+def test_get_study_summary_returns_common_fields(tmp_path: Path) -> None:
+    db_path = tmp_path / "protocols.db"
+    save_documents(
+        db_path,
+        [
+            ProtocolDocument(
+                nct_id="NCT04368728",
+                brief_title="COVID vaccine",
+                document={
+                    "protocolSection": {
+                        "identificationModule": {
+                            "briefTitle": "COVID vaccine",
+                        },
+                        "conditionsModule": {
+                            "conditions": ["COVID-19", "SARS-CoV-2 Infection"],
+                            "keywords": ["Vaccine"],
+                        },
+                        "designModule": {
+                            "studyType": "INTERVENTIONAL",
+                            "phases": ["PHASE2", "PHASE3"],
+                            "designInfo": {"primaryPurpose": "PREVENTION"},
+                            "enrollmentInfo": {"count": 46969, "type": "ACTUAL"},
+                        },
+                        "eligibilityModule": {
+                            "minimumAge": "12 Years",
+                            "sex": "ALL",
+                            "healthyVolunteers": True,
+                        },
+                    }
+                },
+            )
+        ],
+    )
+
+    summary = get_study_summary(db_path=db_path, nct_id="NCT04368728")
+    assert summary["scoped_to_nct"] is True
+    study = summary["studies"][0]
+    assert study["conditions"] == ["COVID-19", "SARS-CoV-2 Infection"]
+    assert study["phases"] == ["PHASE2", "PHASE3"]
+    assert study["primary_purpose"] == "PREVENTION"
+    assert study["enrollment"] == {"count": 46969, "type": "ACTUAL"}
+    assert study["minimum_age"] == "12 Years"
+    assert study["sex"] == "ALL"
+    assert summary["paths"]["conditions"].endswith("conditionsModule.conditions")
+
+
+def test_is_outcome_query() -> None:
+    assert is_outcome_query("What is the primary outcome?")
+    assert is_outcome_query("List the endpoints")
+    assert not is_outcome_query("Where should I run my next trials?")
 
 
 def test_get_protocol_field_rejects_unsafe_paths(tmp_path) -> None:

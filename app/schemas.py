@@ -46,6 +46,15 @@ class Citation(BaseModel):
     nct_id: str | None = None
     section: str | None = None
 
+    @field_validator("site_id", "nct_id", "section", mode="before")
+    @classmethod
+    def empty_to_none(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
 
 class LlmDebugExchange(BaseModel):
     request: dict[str, Any]

@@ -77,6 +77,29 @@ def test_fts5_is_separate_external_content_table(tmp_path) -> None:
     assert "content_rowid='id'" in fts_sql
 
 
+def test_fts5_search_can_scope_to_one_nct(tmp_path) -> None:
+    db_path = tmp_path / "protocols.db"
+    save_chunks(
+        db_path,
+        [
+            _chunk(
+                nct_id="NCT04368728",
+                section="conditions",
+                text="RNA vaccine candidate against coronavirus",
+                end_char=41,
+            ),
+            _chunk(
+                nct_id="NCT04516746",
+                section="conditions",
+                text="RNA vaccine is mentioned in an oncology study",
+                end_char=45,
+            ),
+        ],
+    )
+    hits = search_chunks_from_path(db_path, "vaccine", nct_id="NCT04368728")
+    assert [chunk.nct_id for chunk, _rank in hits] == ["NCT04368728"]
+
+
 def test_fts5_search_ranks_matching_chunk(tmp_path) -> None:
     db_path = tmp_path / "protocols.db"
     save_chunks(

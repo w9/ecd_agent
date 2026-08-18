@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from app.agent.loop import run_agent
-from app.agent.tools import ToolContext, execute_tool
+from app.agent.tools import EvidenceLedger, ToolContext, execute_tool, sanitize_response
 from app.llm import ChatResult, LLMError, ToolCall
 from app.rag.chunk import Chunk
 from app.rag.store import ProtocolDocument, save_chunks, save_documents
@@ -170,6 +170,84 @@ def test_search_protocol_reports_scoped_when_nct_passed(ctx: ToolContext) -> Non
     assert result["chunks"]
 
 
+def test_sanitize_response_fixes_citations_and_route() -> None:
+    ledger = EvidenceLedger()
+    ledger.used_site_tool = True
+    ledger.used_protocol_tool = True
+    ledger.site_rows = [{"site_id": "SITE-009"}]
+    ledger.protocol_ncts = {"NCT04368728"}
+    ledger.protocol_sections = {"design", "eligibility.structured"}
+    cleaned = sanitize_response(
+        {
+            "answer": "Use SITE-009 for NCT04368728.",
+            "route": "site",
+            "source": "sites",
+            "citations": [
+                {
+                    "source": "sites",
+                    "site_id": "SITE-009",
+                    "nct_id": "",
+                    "section": "site feasibility metrics",
+                },
+                {
+                    "source": "protocol",
+                    "site_id": "",
+                    "nct_id": "NCT04368728",
+                    "section": "design and eligibility.structured",
+                },
+                {
+                    "source": "sites",
+                    "site_id": "SITE-999",
+                },
+            ],
+        },
+        ledger,
+    )
+    assert cleaned["answer"] == "Use SITE-009 for NCT04368728."
+    assert cleaned["route"] == "hybrid"
+    assert cleaned["source"] == "hybrid"
+    assert cleaned["citations"] == [
+        {"source": "sites", "site_id": "SITE-009"},
+        {"source": "protocol", "nct_id": "NCT04368728", "section": "design"},
+        {
+            "source": "protocol",
+            "nct_id": "NCT04368728",
+            "section": "eligibility.structured",
+        },
+    ]
+
+
+def test_sanitize_response_keeps_source_none_abstain() -> None:
+    ledger = EvidenceLedger()
+    ledger.used_protocol_tool = True
+    ledger.protocol_ncts = {"NCT04368728", "NCT04470427"}
+    cleaned = sanitize_response(
+        {
+            "answer": "Please provide an NCT ID.",
+            "route": "protocol",
+            "source": "none",
+            "citations": [
+                {"source": "protocol", "nct_id": "NCT04368728", "section": "design"}
+            ],
+        },
+        ledger,
+    )
+    assert cleaned["route"] == "protocol"
+    assert cleaned["source"] == "none"
+    assert cleaned["citations"] == []
+
+
+def test_get_study_summary_dispatch(ctx: ToolContext) -> None:
+    result = execute_tool(
+        "get_study_summary",
+        {"nct_id": "NCT04516746"},
+        ctx,
+    )
+    assert result["scoped_to_nct"] is True
+    assert result["studies"][0]["nct_id"] == "NCT04516746"
+    assert result["studies"][0]["minimum_age"] == "18 Years"
+
+
 def test_get_protocol_field_and_filter_sites_dispatch(ctx: ToolContext) -> None:
     field = execute_tool(
         "get_protocol_field",
@@ -246,7 +324,7 @@ def test_run_agent_uses_tool_results(ctx: ToolContext, monkeypatch: pytest.Monke
     assert response.llm_debug is None
 
 
-def test_run_agent_does_not_rewrite_respond_payload(
+def test_run_agent_keeps_respond_answer_text(
     ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     turns = [
@@ -291,7 +369,7 @@ def test_run_agent_does_not_rewrite_respond_payload(
     assert response.answer == "SITE-011 has the lowest enrollment rate at 0.0."
     assert response.route == "site"
     assert response.source == "sites"
-    assert response.citations[0].site_id == "SITE-011"
+    assert all(citation.site_id != "SITE-011" for citation in response.citations)
 
 
 def test_run_agent_includes_llm_debug(ctx: ToolContext, monkeypatch: pytest.MonkeyPatch) -> None:

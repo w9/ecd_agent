@@ -9,7 +9,13 @@ from typing import Any
 
 import app.llm as llm
 from app.agent.prompts import SYSTEM_PROMPT
-from app.agent.tools import TOOL_SCHEMAS, EvidenceLedger, ToolContext, execute_tool
+from app.agent.tools import (
+    TOOL_SCHEMAS,
+    EvidenceLedger,
+    ToolContext,
+    execute_tool,
+    sanitize_response,
+)
 from app.llm import ChatResult, LLMError
 from app.schemas import LlmDebugExchange, QueryResponse
 
@@ -52,7 +58,7 @@ def run_agent(
                     }
                 )
             if ledger.submitted is not None:
-                return finish(_submitted_response(ledger.submitted))
+                return finish(_submitted_response(ledger))
             continue
         return finish(
             QueryResponse(
@@ -66,12 +72,13 @@ def run_agent(
     return finish(QueryResponse(answer="", route="reject", source="none", citations=[]))
 
 
-def _submitted_response(payload: dict[str, Any]) -> QueryResponse:
+def _submitted_response(ledger: EvidenceLedger) -> QueryResponse:
+    payload = sanitize_response(ledger.submitted or {}, ledger)
     return QueryResponse(
-        answer=str(payload.get("answer") or ""),
+        answer=payload["answer"],
         route=payload["route"],
         source=payload["source"],
-        citations=payload.get("citations") or [],
+        citations=payload["citations"],
     )
 
 

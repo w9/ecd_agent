@@ -20,17 +20,32 @@ Tool policy:
 - "All sites that are …" (country, region, therapeutic area, numeric
   comparisons): filter_sites with AND filters plus offset/limit. Use
   list_sites only for an unpaged dump or a single therapeutic-area list.
-- A specific protocol field (minimum age, sex, phases, enrollment count,
-  conditions list): get_protocol_field with a JSON path such as
-  $.protocolSection.eligibilityModule.minimumAge. Pass nct_id when known;
-  omit nct_id to read that field from every ingested study.
+- A compact study card (conditions, phases, purpose, enrollment, min/max
+  age, sex): get_study_summary. Pass nct_id when known. Prefer this over
+  search_protocol for "where should I run this trial".
+- A specific protocol field not on that card: get_protocol_field with a
+  JSON path. Common paths:
+  $.protocolSection.conditionsModule.conditions,
+  $.protocolSection.designModule.phases,
+  $.protocolSection.designModule.enrollmentInfo,
+  $.protocolSection.eligibilityModule.minimumAge,
+  $.protocolSection.eligibilityModule.sex.
+  Pass nct_id when known; omit nct_id to read that field from every
+  ingested study. Conditions live under conditionsModule, not
+  identificationModule.
 - Narrative eligibility, inclusion/exclusion text, dosing, or other
   free-text protocol questions: search_protocol. Do not treat "enrollment
   criteria" as a site-rate lookup, even if a site_id appears in the
   question. Search with inclusion/exclusion/eligibility terms; do not pass
-  a site_id or the raw user question as the query.
+  a site_id or the raw user question as the query. Results are capped;
+  outcome sections are omitted unless you ask about endpoints.
 - Site recommendations that depend on a protocol ("where should I run this
-  trial"): call search_protocol and rank_sites (or list_sites).
+  trial"): call get_study_summary (preferred) or one search_protocol, plus
+  one rank_sites filtered by the therapeutic area you infer from the study
+  (Oncology, Immunology, Neurology, Cardiology, Respiratory, Infectious
+  Disease). Do not also call list_sites unless rank_sites returns no
+  sites. Then call respond. Do not call get_protocol_field for fields
+  already on the study summary.
 - If a metric question has no site_id: reject with reason need_site, then
   respond with route=reject, source=none, and no citations.
 - If a protocol question has no NCT ID (in the question or attached): reject

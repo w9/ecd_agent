@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -9,7 +10,13 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.schemas import QueryResponse
-from app.tools.protocols import get_protocol_field, search_protocol
+from app.tools.protocols import (
+    COMMON_PROTOCOL_PATHS,
+    SUMMARY_CITE_SECTIONS,
+    get_protocol_field,
+    get_study_summary,
+    search_protocol,
+)
 from app.tools.sites import (
     FILTER_COMPARE_FIELDS,
     FILTER_EQ_FIELDS,
@@ -164,9 +171,12 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "search_protocol",
             "description": (
                 "Retrieve ingested protocol chunks. Pass nct_id when known; "
-                "omit nct_id if unknown. site_id is not a filter and does not "
-                "bind chunks to a site. For eligibility questions, search with "
-                "inclusion/exclusion/eligibility terms, not the raw utterance."
+                "omit nct_id if unknown. Results are capped and scoped to that "
+                "NCT; outcome sections are omitted unless the query is about "
+                "endpoints. site_id is not a filter and does not bind chunks "
+                "to a site. For eligibility questions, search with "
+                "inclusion/exclusion/eligibility terms, not the raw utterance. "
+                "For site recommendations, prefer get_study_summary."
             ),
             "parameters": {
                 "type": "object",
@@ -193,9 +203,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "get_protocol_field",
             "description": (
                 "Extract one nested field from the stored raw ClinicalTrials.gov "
-                "JSON via json_extract. Pass a JSON path such as "
-                "$.protocolSection.eligibilityModule.minimumAge. "
-                "Omit nct_id to return that field for every ingested study."
+                "JSON via json_extract. Prefer get_study_summary when you need "
+                "conditions, phases, purpose, enrollment, age, or sex. Common "
+                "paths: "
+                + ", ".join(COMMON_PROTOCOL_PATHS)
+                + ". Omit nct_id to return that field for every ingested study."
             ),
             "parameters": {
                 "type": "object",
@@ -213,6 +225,31 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                 },
                 "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_study_summary",
+            "description": (
+                "Return a compact study card: title, conditions, keywords, "
+                "phases, study type, primary purpose, enrollment, minimum "
+                "age, maximum age, sex, and healthy-volunteer flag. Use this "
+                "for site recommendations instead of dumping protocol chunks. "
+                "Pass nct_id when known; omit it to summarize every study."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nct_id": {
+                        "type": "string",
+                        "description": (
+                            "NCT followed by 8 digits. Omit to summarize "
+                            "every ingested study."
+                        ),
+                    },
+                },
             },
         },
     },
@@ -288,11 +325,16 @@ class ToolContext:
     protocols_db_path: Path | str
 
 
+_SECTION_SPLIT = re.compile(r"\s+and\s+|\s*,\s*|\s*/\s*|\s*;\s*", re.I)
+
+
 @dataclass
 class EvidenceLedger:
     site_rows: list[dict[str, Any]] = field(default_factory=list)
     metric_results: list[dict[str, Any]] = field(default_factory=list)
     protocol_chunks: list[dict[str, Any]] = field(default_factory=list)
+    protocol_ncts: set[str] = field(default_factory=set)
+    protocol_sections: set[str] = field(default_factory=set)
     protocol_scoped_to_nct: bool = False
     reject_reason: str | None = None
     used_site_tool: bool = False
@@ -310,15 +352,25 @@ class EvidenceLedger:
             if isinstance(reason, str):
                 self.reject_reason = reason
             return
-        if name in {"search_protocol", "get_protocol_field"}:
+        if name in {"search_protocol", "get_protocol_field", "get_study_summary"}:
             self.used_protocol_tool = True
             if payload.get("scoped_to_nct") or payload.get("nct_id"):
                 self.protocol_scoped_to_nct = True
             chunks = payload.get("chunks")
             if isinstance(chunks, list):
-                self.protocol_chunks.extend(
-                    chunk for chunk in chunks if isinstance(chunk, dict)
-                )
+                for chunk in chunks:
+                    if not isinstance(chunk, dict):
+                        continue
+                    self.protocol_chunks.append(chunk)
+                    self._remember_protocol(chunk.get("nct_id"), chunk.get("section"))
+            for row in payload.get("results") or []:
+                if isinstance(row, dict):
+                    self._remember_protocol(row.get("nct_id"), None)
+            if name == "get_study_summary":
+                self.protocol_sections.update(SUMMARY_CITE_SECTIONS)
+                for study in payload.get("studies") or []:
+                    if isinstance(study, dict):
+                        self._remember_protocol(study.get("nct_id"), "summary")
             return
         if name in {
             "lookup_site",
@@ -358,6 +410,12 @@ class EvidenceLedger:
             if isinstance(sites, list):
                 self.site_rows.extend(row for row in sites if isinstance(row, dict))
 
+    def _remember_protocol(self, nct_id: object, section: object) -> None:
+        if isinstance(nct_id, str) and nct_id.strip():
+            self.protocol_ncts.add(nct_id.strip().upper())
+        if isinstance(section, str) and section.strip():
+            self.protocol_sections.add(section.strip())
+
 
 def execute_tool(name: str, arguments: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     """Run one allowlisted tool. Unknown names and bad args become error payloads."""
@@ -369,6 +427,7 @@ def execute_tool(name: str, arguments: dict[str, Any], ctx: ToolContext) -> dict
         "filter_sites": _filter_sites,
         "search_protocol": _search_protocol,
         "get_protocol_field": _get_protocol_field,
+        "get_study_summary": _get_study_summary,
         "respond": _respond,
         "reject": _reject,
     }
@@ -471,6 +530,13 @@ def _get_protocol_field(arguments: dict[str, Any], ctx: ToolContext) -> dict[str
     return get_protocol_field(path, db_path=ctx.protocols_db_path, nct_id=nct_id)
 
 
+def _get_study_summary(arguments: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    nct_id = _optional_str(arguments, "nct_id")
+    if nct_id:
+        nct_id = nct_id.strip().upper()
+    return get_study_summary(db_path=ctx.protocols_db_path, nct_id=nct_id)
+
+
 def _respond(arguments: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     del ctx
     answer = arguments.get("answer")
@@ -488,8 +554,117 @@ def _respond(arguments: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         "answer": response.answer,
         "route": response.route,
         "source": response.source,
-        "citations": [citation.model_dump() for citation in response.citations],
+        "citations": [
+            citation.model_dump(exclude_none=True) for citation in response.citations
+        ],
     }
+
+
+def sanitize_response(payload: dict[str, Any], ledger: EvidenceLedger) -> dict[str, Any]:
+    """Keep the model's answer; fix route, source, and citations from tools."""
+    route, source = _route_from_ledger(ledger, payload)
+    citations: list[dict[str, str]] = []
+    if source != "none":
+        citations = _sanitize_citations(payload.get("citations") or [], ledger)
+    return {
+        "answer": str(payload.get("answer") or ""),
+        "route": route,
+        "source": source,
+        "citations": citations,
+    }
+
+
+def _route_from_ledger(
+    ledger: EvidenceLedger, payload: dict[str, Any]
+) -> tuple[str, str]:
+    if payload.get("route") == "reject" or ledger.reject_reason:
+        return "reject", "none"
+    if payload.get("source") == "none":
+        route = payload.get("route")
+        if route in {"site", "protocol", "hybrid", "reject"}:
+            return str(route), "none"
+        return "reject", "none"
+    if ledger.used_site_tool and ledger.used_protocol_tool:
+        return "hybrid", "hybrid"
+    if ledger.used_protocol_tool:
+        has_protocol = bool(ledger.protocol_chunks or ledger.protocol_ncts)
+        return "protocol", "protocol" if has_protocol else "none"
+    if ledger.used_site_tool:
+        has_sites = bool(ledger.site_rows) or any(
+            result.get("found") for result in ledger.metric_results
+        )
+        return "site", "sites" if has_sites else "none"
+    return "reject", "none"
+
+
+def _sanitize_citations(
+    citations: list[Any], ledger: EvidenceLedger
+) -> list[dict[str, str]]:
+    allowed_sites = {
+        str(row["site_id"])
+        for row in ledger.site_rows
+        if isinstance(row, dict) and row.get("site_id")
+    }
+    for result in ledger.metric_results:
+        site_id = result.get("site_id")
+        if result.get("found") and site_id:
+            allowed_sites.add(str(site_id))
+    allowed_ncts = {nct.upper() for nct in ledger.protocol_ncts}
+    allowed_sections = set(ledger.protocol_sections)
+
+    cleaned: list[dict[str, str]] = []
+    seen: set[tuple[str, ...]] = set()
+    for raw in citations:
+        if not isinstance(raw, dict):
+            continue
+        source = raw.get("source")
+        site_id = _blank_to_none(raw.get("site_id"))
+        nct_id = _blank_to_none(raw.get("nct_id"))
+        section = _blank_to_none(raw.get("section"))
+        if source == "sites":
+            if site_id and site_id in allowed_sites:
+                item = {"source": "sites", "site_id": site_id}
+                key = ("sites", site_id)
+                if key not in seen:
+                    seen.add(key)
+                    cleaned.append(item)
+            continue
+        if source != "protocol":
+            continue
+        if not nct_id:
+            continue
+        nct_id = nct_id.upper()
+        if nct_id not in allowed_ncts:
+            continue
+        sections = _split_sections(section) if section else []
+        matched = [part for part in sections if part in allowed_sections]
+        if matched:
+            for part in matched:
+                item = {"source": "protocol", "nct_id": nct_id, "section": part}
+                key = ("protocol", nct_id, part)
+                if key not in seen:
+                    seen.add(key)
+                    cleaned.append(item)
+            continue
+        if not section:
+            item = {"source": "protocol", "nct_id": nct_id}
+            key = ("protocol", nct_id, "")
+            if key not in seen:
+                seen.add(key)
+                cleaned.append(item)
+    return cleaned
+
+
+def _split_sections(section: str) -> list[str]:
+    parts = [part.strip() for part in _SECTION_SPLIT.split(section) if part.strip()]
+    return parts or [section]
+
+
+def _blank_to_none(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 def _reject(arguments: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
