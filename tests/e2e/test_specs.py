@@ -164,7 +164,16 @@ def test_enrollment_criteria_is_eligibility_not_a_site_rate(e2e_client, stub_llm
     body = response.json()
     _assert_envelope(body)
     assert body["route"] == "protocol"
+    assert body["source"] == "none"
+    assert body["citations"] == []
+    lowered = body["answer"].lower()
+    assert "nct" in lowered
     assert "8.3" not in body["answer"]
+    assert "51" not in body["answer"]
+    assert "SITE-001" not in body["answer"]
+    assert "associated with" not in lowered
+    assert "found for" not in lowered
+    assert "protocols found for" not in lowered
 
 
 # --- Unknown / missing data (in-scope, abstain) -----------------------------

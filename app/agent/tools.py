@@ -100,15 +100,23 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "search_protocol",
             "description": (
                 "Retrieve ingested protocol chunks. Pass nct_id when known; "
-                "otherwise search by the question text."
+                "omit nct_id if unknown. site_id is not a filter and does not "
+                "bind chunks to a site. For eligibility questions, search with "
+                "inclusion/exclusion/eligibility terms, not the raw utterance."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string"},
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Eligibility or scientific terms to search. "
+                            "Do not include a site_id."
+                        ),
+                    },
                     "nct_id": {
                         "type": "string",
-                        "description": "NCT followed by 8 digits, if known.",
+                        "description": "NCT followed by 8 digits, if known. Omit if unknown.",
                     },
                 },
                 "required": ["query"],
@@ -149,6 +157,7 @@ class EvidenceLedger:
     site_rows: list[dict[str, Any]] = field(default_factory=list)
     metric_results: list[dict[str, Any]] = field(default_factory=list)
     protocol_chunks: list[dict[str, Any]] = field(default_factory=list)
+    protocol_scoped_to_nct: bool = False
     reject_reason: str | None = None
     used_site_tool: bool = False
     used_protocol_tool: bool = False
@@ -163,6 +172,8 @@ class EvidenceLedger:
             return
         if name == "search_protocol":
             self.used_protocol_tool = True
+            if payload.get("scoped_to_nct") or payload.get("nct_id"):
+                self.protocol_scoped_to_nct = True
             chunks = payload.get("chunks")
             if isinstance(chunks, list):
                 self.protocol_chunks.extend(
@@ -272,7 +283,18 @@ def _search_protocol(arguments: dict[str, Any], ctx: ToolContext) -> dict[str, A
     if nct_id:
         nct_id = nct_id.strip().upper()
     chunks = search_protocol(query, db_path=ctx.protocols_db_path, nct_id=nct_id)
-    return {"chunks": chunks, "nct_id": nct_id}
+    return {
+        "chunks": chunks,
+        "nct_id": nct_id,
+        "scoped_to_nct": bool(nct_id),
+        "site_bound": False,
+        "note": (
+            "Chunks are not associated with a site_id. "
+            "search_protocol has no site filter. "
+            "If scoped_to_nct is false and chunks span multiple studies, "
+            "ask for an NCT ID instead of merging them."
+        ),
+    }
 
 
 def _reject(arguments: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:

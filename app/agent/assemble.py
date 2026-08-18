@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.agent.tools import EvidenceLedger
 from app.grounding import format_number, grounded_citations
 from app.schemas import Citation, QueryResponse, Route, Source
+
+_SITE_ID_TOKEN = re.compile(r"SITE-\d+", re.I)
+_SITE_BINDING_PHRASE = re.compile(
+    r"\s+(?:associated with|found for|at|for)\s+SITE-\d+\b",
+    re.I,
+)
 
 
 def assemble(query: str, ledger: EvidenceLedger, model_answer: str | None) -> QueryResponse:
@@ -22,6 +29,17 @@ def assemble(query: str, ledger: EvidenceLedger, model_answer: str | None) -> Qu
     if route == "protocol" and not ledger.protocol_chunks and not ledger.site_rows:
         return QueryResponse(
             answer="I don't have any information in the ingested protocols for that question.",
+            route="protocol",
+            source="none",
+            citations=[],
+        )
+    if route == "protocol" and _unscoped_multi_study(ledger):
+        return QueryResponse(
+            answer=(
+                "I found eligibility text from more than one study, and none of "
+                "it is tied to a site. Please provide an NCT ID for the protocol "
+                "you want me to look up."
+            ),
             route="protocol",
             source="none",
             citations=[],
@@ -42,6 +60,8 @@ def assemble(query: str, ledger: EvidenceLedger, model_answer: str | None) -> Qu
     source = _infer_source(ledger, route)
     answer = (model_answer or "").strip() or _fallback_answer(ledger, route)
     answer = _pin_site_numbers(answer, ledger)
+    if route == "protocol":
+        answer = _unbind_sites_from_protocol_answer(answer)
     return QueryResponse(answer=answer, route=route, source=source, citations=citations)
 
 
@@ -49,8 +69,9 @@ def should_short_circuit(ledger: EvidenceLedger) -> bool:
     """True when more model turns cannot change a deterministic outcome."""
     if _is_reject(ledger):
         return True
-    if ledger.used_protocol_tool and not ledger.protocol_chunks and not ledger.used_site_tool:
-        return True
+    if ledger.used_protocol_tool and not ledger.used_site_tool:
+        if not ledger.protocol_chunks or _unscoped_multi_study(ledger):
+            return True
     if not ledger.used_site_tool:
         return False
     if ledger.used_protocol_tool:
@@ -219,6 +240,24 @@ def _first_requested_site(ledger: EvidenceLedger) -> str | None:
 
 def _looks_like_ranking(ledger: EvidenceLedger) -> bool:
     return len(ledger.site_rows) > 1
+
+
+def _unscoped_multi_study(ledger: EvidenceLedger) -> bool:
+    if ledger.protocol_scoped_to_nct:
+        return False
+    ncts = {
+        str(chunk.get("nct_id")).upper()
+        for chunk in ledger.protocol_chunks
+        if chunk.get("nct_id")
+    }
+    return len(ncts) > 1
+
+
+def _unbind_sites_from_protocol_answer(answer: str) -> str:
+    """Drop site IDs from protocol-only answers; chunks are not site-bound."""
+    cleaned = _SITE_BINDING_PHRASE.sub("", answer)
+    cleaned = _SITE_ID_TOKEN.sub("", cleaned)
+    return re.sub(r" {2,}", " ", cleaned).strip()
 
 
 def _citations(ledger: EvidenceLedger) -> list[Citation]:

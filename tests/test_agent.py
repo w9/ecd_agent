@@ -142,6 +142,84 @@ def test_assemble_no_tools_is_reject() -> None:
     assert "8.3" not in response.answer
 
 
+def test_search_protocol_reports_unscoped_and_not_site_bound(ctx: ToolContext) -> None:
+    result = execute_tool(
+        "search_protocol",
+        {"query": "Enrollment criteria at SITE-001", "nct_id": ""},
+        ctx,
+    )
+    assert result["scoped_to_nct"] is False
+    assert result["nct_id"] is None
+    assert result["site_bound"] is False
+    assert "site" in result["note"].lower()
+
+
+def test_search_protocol_reports_scoped_when_nct_passed(ctx: ToolContext) -> None:
+    result = execute_tool(
+        "search_protocol",
+        {"query": "minimum age", "nct_id": "NCT04516746"},
+        ctx,
+    )
+    assert result["scoped_to_nct"] is True
+    assert result["nct_id"] == "NCT04516746"
+    assert result["chunks"]
+
+
+def test_assemble_unscoped_multi_nct_asks_for_nct() -> None:
+    ledger = EvidenceLedger()
+    ledger.used_protocol_tool = True
+    ledger.protocol_scoped_to_nct = False
+    ledger.protocol_chunks = [
+        {
+            "nct_id": "NCT04470427",
+            "section": "eligibility.inclusion",
+            "text": "Healthy adults or adults with stable conditions.",
+        },
+        {
+            "nct_id": "NCT04368728",
+            "section": "eligibility.inclusion",
+            "text": "Healthy participants at risk of COVID-19.",
+        },
+    ]
+    response = assemble(
+        "Enrollment criteria at SITE-001",
+        ledger,
+        "The available enrollment criteria associated with protocols found "
+        "for SITE-001 include NCT04470427. The rate is 8.3.",
+    )
+    assert response.route == "protocol"
+    assert response.source == "none"
+    assert response.citations == []
+    lowered = response.answer.lower()
+    assert "nct" in lowered
+    assert "8.3" not in response.answer
+    assert "SITE-001" not in response.answer
+    assert "associated with" not in lowered
+    assert "found for" not in lowered
+
+
+def test_assemble_protocol_strips_unbound_site_ids() -> None:
+    ledger = EvidenceLedger()
+    ledger.used_protocol_tool = True
+    ledger.protocol_chunks = [
+        {
+            "nct_id": "NCT04516746",
+            "section": "eligibility.inclusion",
+            "text": "Age 18 years or older.",
+        }
+    ]
+    response = assemble(
+        "Enrollment criteria at SITE-001",
+        ledger,
+        "Inclusion criteria associated with protocols found for SITE-001: Age 18.",
+    )
+    assert response.route == "protocol"
+    assert response.source == "protocol"
+    assert "18" in response.answer
+    assert "SITE-001" not in response.answer
+    assert "8.3" not in response.answer
+
+
 def test_run_agent_uses_tool_results(ctx: ToolContext, monkeypatch: pytest.MonkeyPatch) -> None:
     turns = [
         ChatResult(

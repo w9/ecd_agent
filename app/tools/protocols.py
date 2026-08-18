@@ -10,6 +10,12 @@ from app.rag.chunk import Chunk
 from app.rag.store import load_chunks_from_path, search_chunks_from_path
 
 _FTS_TOKEN = re.compile(r"[A-Za-z]{3,}")
+_SITE_ID = re.compile(r"\bSITE-\d+\b", re.I)
+_ELIGIBILITY_QUERY = re.compile(
+    r"(enrollment|inclusion|exclusion)\s+criteria|\beligibility\b",
+    re.I,
+)
+_ELIGIBILITY_FTS = "eligibility OR inclusion OR exclusion"
 _FTS_STOP = {
     "about",
     "and",
@@ -47,6 +53,11 @@ def search_protocol(
     return [_chunk_payload(chunk) for chunk in chunks]
 
 
+def is_eligibility_query(query: str) -> bool:
+    """True for inclusion/exclusion/enrollment-criteria lookalikes."""
+    return bool(_ELIGIBILITY_QUERY.search(query))
+
+
 def _retrieve_chunks(
     query: str,
     nct_id: str | None,
@@ -70,14 +81,24 @@ def _retrieve_chunks(
     if not fts:
         return []
     try:
-        return [chunk for chunk, _rank in search_chunks_from_path(path, fts, limit=limit)]
+        chunks = [chunk for chunk, _rank in search_chunks_from_path(path, fts, limit=limit)]
     except Exception:
         return []
+    if is_eligibility_query(query):
+        return [chunk for chunk in chunks if _is_eligibility_section(chunk.section)]
+    return chunks
 
 
 def _fts_query(query: str) -> str:
-    tokens = [token for token in _FTS_TOKEN.findall(query) if token.lower() not in _FTS_STOP]
-    return " OR ".join(tokens)
+    if is_eligibility_query(query):
+        return _ELIGIBILITY_FTS
+    cleaned = _SITE_ID.sub(" ", query)
+    tokens = [token for token in _FTS_TOKEN.findall(cleaned) if token.lower() not in _FTS_STOP]
+    return " AND ".join(tokens)
+
+
+def _is_eligibility_section(section: str) -> bool:
+    return str(section).lower().startswith("eligibility.")
 
 
 def _chunk_payload(chunk: Chunk) -> dict[str, Any]:

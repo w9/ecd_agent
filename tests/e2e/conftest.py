@@ -102,6 +102,25 @@ def e2e_protocols_db_path(tmp_path: Path) -> Path:
                 end_char=37,
                 chunk_index=0,
             ),
+            # Second study so unscoped "enrollment criteria" cannot look site-bound.
+            Chunk(
+                nct_id="NCT04470427",
+                section="eligibility.inclusion",
+                text="Healthy adults or adults with stable pre-existing medical conditions.",
+                brief_title="mRNA-1273 COVID-19 vaccine study",
+                start_char=0,
+                end_char=68,
+                chunk_index=0,
+            ),
+            Chunk(
+                nct_id="NCT04470427",
+                section="design",
+                text="Study type: INTERVENTIONAL. Enrollment: 51 (ESTIMATED).",
+                brief_title="mRNA-1273 COVID-19 vaccine study",
+                start_char=0,
+                end_char=55,
+                chunk_index=0,
+            ),
         ],
     )
     return path
