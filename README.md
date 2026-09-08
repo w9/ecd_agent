@@ -1,23 +1,20 @@
-# Clinical Site Feasibility AI Assistant — Starter
+# Clinical Site Feasibility AI Assistant
 
-Local starter scaffold that mirrors the Genentech/Roche SE7 onsite exercise starter repository for Early Clinical Development.
+Local service that answers free-text questions about public clinical trial protocols and mock site enrollment data.
 
-This repository provides **scaffolding only**:
+It combines:
 
-- FastAPI app with a `/health` endpoint
-- Script to download public ClinicalTrials.gov study JSON
-- Script to create fake site enrollment CSV + SQLite data
-- Illustrative LLM connectivity smoke test
-
-It does **not** include the interview solution (no RAG indexing, no main query endpoint, no agent routing).
-
-> **Interview note:** The real exercise uses a private GitHub repository. Do **not** publish interview solutions to a public repository.
+- A FastAPI backend with `GET /health` and `POST /query`
+- Retrieval over cached ClinicalTrials.gov study text
+- Tool calls into a SQLite site table for enrollment metrics
+- An optional Vite + React chat UI
 
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/) (manages Python + dependencies)
 - Python **3.11+** (uv can install a matching interpreter if needed)
-- Network access to ClinicalTrials.gov (for protocol fetch) and an LLM endpoint (for the smoke test)
+- Network access to ClinicalTrials.gov (for protocol fetch) and an LLM endpoint (for query answers and the smoke test)
+- Node.js (only if you run the chat UI)
 
 ## Setup
 
@@ -29,10 +26,13 @@ cp .env.example .env
 
 This creates `.venv`, installs runtime + dev dependencies, and uses the locked versions in `uv.lock`.
 
-## Run the health endpoint
+`just setup` also installs the chat UI dependencies.
+
+## Run the API
 
 ```bash
 uv run uvicorn app.main:app --reload
+# or: just dev
 ```
 
 In another terminal:
@@ -40,6 +40,8 @@ In another terminal:
 ```bash
 curl http://127.0.0.1:8000/health
 # {"status":"ok"}
+
+just query "What is the enrollment rate for SITE-001?"
 ```
 
 Interactive docs (optional): http://127.0.0.1:8000/docs
@@ -57,17 +59,19 @@ just chat
 # http://127.0.0.1:5173
 ```
 
-## Fetch public protocol data
+## Fetch and ingest public protocol data
 
-Downloads ClinicalTrials.gov API v2 JSON into `data/protocols/`:
+Downloads ClinicalTrials.gov API v2 JSON into `data/protocols/`, then indexes chunks:
 
 ```bash
 uv run python scripts/fetch_protocols.py
 # or specific studies:
 uv run python scripts/fetch_protocols.py NCT04516746 NCT04368728 NCT04470427
+
+uv run python scripts/ingest_protocols.py
 ```
 
-Parsing, chunking, indexing, and retrieval are left for the exercise.
+`just data` runs fetch, ingest, and mock site creation together.
 
 ## Create mock site data
 
@@ -82,7 +86,7 @@ Outputs:
 - `data/sites.csv`
 - `data/sites.db` (SQLite table `sites`)
 
-Includes a few sites with zero/missing values so later “no information” behavior can be demonstrated.
+A few sites have zero or missing values so “no information” answers can be demonstrated.
 
 ## LLM smoke test (illustrative only)
 
@@ -113,20 +117,25 @@ uv run pytest
 ```
 .
 ├── README.md
+├── TASK.md
+├── SPECS.md
 ├── pyproject.toml
 ├── uv.lock
 ├── .env.example
-├── .gitignore
 ├── app/
-│   ├── __init__.py
-│   ├── main.py             # FastAPI app with /health only
-│   └── config.py
+│   ├── main.py             # FastAPI: /health, /query, /protocols
+│   ├── query.py
+│   ├── config.py
+│   ├── agent/              # tool-using loop
+│   ├── rag/                # parse, chunk, SQLite FTS
+│   └── tools/              # site + protocol tools
 ├── scripts/
 │   ├── fetch_protocols.py
+│   ├── ingest_protocols.py
 │   └── create_mock_site_data.py
 ├── data/                   # cached protocols + site db (gitignored contents)
 ├── tests/
-│   └── test_health.py
+├── web/                    # Vite + React chat UI
 └── examples/
     └── llm_smoke_test.py
 ```
@@ -134,4 +143,4 @@ uv run pytest
 ## Constraints
 
 - Use only public trial information and the supplied mock site data.
-- Do not commit secrets, credentials, real patient data, or confidential company information.
+- Do not commit secrets, credentials, or real patient data.

@@ -1,8 +1,7 @@
 """Application settings.
 
 Load configuration from environment variables (and an optional `.env` file).
-Candidates can extend this module with LLM credentials, data paths, and
-feature flags during the timed exercise.
+Extend this module with LLM credentials, data paths, and feature flags.
 """
 
 from functools import lru_cache
@@ -14,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    """Runtime configuration for the starter service."""
+    """Runtime configuration for the service."""
 
     model_config = SettingsConfigDict(
         env_file=".env",

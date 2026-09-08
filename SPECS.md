@@ -1,6 +1,6 @@
 # Specs — Clinical Site Feasibility Agent
 
-Behavior contract for the graded deliverables. Edit this file; implementation follows it.
+Behavior contract for the query API. Edit this file; implementation follows it.
 
 **In scope:** answer free-text questions about (1) mock site enrollment data and (2) ingested public protocols, via one JSON API.
 
@@ -90,7 +90,7 @@ Well-formed JSON, but not enough to answer. HTTP 200, `route: reject`, ask for t
 }
 ```
 
-Protocol / hybrid may pass `nct_id` (also accepted inside `query` text). “Attached protocol” in the brief = `nct_id` on the request. No file upload.
+Protocol / hybrid may pass `nct_id` (also accepted inside `query` text). An attached protocol is `nct_id` on the request. No file upload.
 
 ```json
 {"query": "Where should I run my next oncology trial given this protocol?", "nct_id": "NCT04516746"}

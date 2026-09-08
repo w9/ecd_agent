@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "clinical-site-feasibility"
 version = "0.1.0"
-description = "Starter scaffold for a Clinical Site Feasibility AI Assistant (interview exercise)"
+description = "Clinical Site Feasibility AI Assistant"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

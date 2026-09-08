@@ -1,3 +1,3 @@
-"""Clinical Site Feasibility AI Assistant — starter application package."""
+"""Clinical Site Feasibility AI Assistant."""
 
 __version__ = "0.1.0"

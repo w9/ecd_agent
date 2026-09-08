@@ -2,7 +2,7 @@
 """Download public ClinicalTrials.gov study JSON into data/protocols/.
 
 This script only fetches and caches raw study documents. Parsing, chunking,
-embedding, and retrieval are intentionally left for the candidate.
+embedding, and retrieval happen in the ingest path and the app.
 
 Usage:
     python scripts/fetch_protocols.py
