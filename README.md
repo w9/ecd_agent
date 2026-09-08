@@ -117,7 +117,6 @@ uv run pytest
 ```
 .
 ├── README.md
-├── TASK.md
 ├── SPECS.md
 ├── pyproject.toml
 ├── uv.lock
